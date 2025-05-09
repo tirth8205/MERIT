@@ -1,0 +1,39 @@
+# Python virtual environment
+.venv/
+venv/
+
+# Python bytecode
+__pycache__/
+*.pyc
+
+# IDE and editor files
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Model weights and large files
+models/llama3-8b/
+models/llama31-8b/
+*.safetensors
+*.pth
+
+# Generated results and plots
+results/
+hellaswag_results.json
+gemini_evaluation.json
+gemini_test.json
+merit_evaluation.json
+
+# Logs and temporary files
+*.log
+*.tmp
+temp/
+
+# macOS-specific files
+.DS_Store
+
+# Package and build artifacts
+dist/
+build/
+*.egg-info/
