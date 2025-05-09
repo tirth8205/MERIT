@@ -47,7 +47,7 @@ BENCHMARKS = {
     "mmlu_logic": {
         "load_fn": lambda limit: load_dataset("cais/mmlu", "formal_logic", split=f"test[:{limit}]", trust_remote_code=True),
         "format_fn": lambda example: {
-            "prompt": f"Question: {example['question']}\nChoose the correct answer by selecting the letter (A, B, C, or D):\n" + 
+            "prompt": f"Question: {example['question']}\nTo answer, follow these steps:\n1. Restate the question’s requirement (e.g., identify the conclusion, translate to predicate logic, determine validity).\n2. Explain your reasoning step-by-step, analyzing each option (A, B, C, D) and eliminating incorrect ones. If options are similar (e.g., same meaning), compare their exact wording and context to choose the most precise.\n3. For logical arguments (e.g., validity), verify your reasoning by checking all relevant cases or truth values.\n4. Select the correct answer as a single letter (A, B, C, or D) and double-check it against the question’s requirement.\n5. Provide your final answer in the format: **Final Answer: [letter]**\n\nExample:\nQuestion: Identify the conclusion of this argument: All men are mortal. Socrates is a man. Therefore, Socrates is mortal.\nOptions: A. All men are mortal. B. Socrates is a man. C. Socrates is mortal. D. All mortals are men.\nReasoning:\n1. The question asks for the conclusion, the final claim supported by premises.\n2. Step-by-step:\n   - A: “All men are mortal” is a premise, not the conclusion.\n   - B: “Socrates is a man” is a premise, not the conclusion.\n   - C: “Socrates is mortal” is the final claim, supported by A and B.\n   - D: “All mortals are men” is not stated or implied.\n3. Verification: The conclusion must follow from premises. C is the only option that does.\n4. Answer: C, confirmed as it matches the question’s requirement.\n**Final Answer: C**\n\nNow, answer the following:\n" + 
                      "\n".join([f"{choice}. {text}" for choice, text in zip(["A", "B", "C", "D"], example['choices'])]),
             "reference": example['choices'][example['answer']],
             "label": example['answer']
@@ -95,7 +95,7 @@ def extract_answer(response, benchmark):
                     pass
     elif benchmark in ["arc", "mmlu_math", "mmlu_logic"]:
         patterns = [
-            r'(?:^|\n|\s|^Answer:|^So the answer is)\s*([A-D])(?:\s|$|\.|,|\))',  # A, A., A), Answer: A
+            r'(?:^|\n|\s|^Answer:|^So the answer is|^Final Answer:)\s*([A-D])(?:\s|$|\.|,|\))',  # A, A., A), Answer: A
             r'[Tt]he correct answer is \**([A-D])\**',  # **A**
             r'[Oo]ption \**([A-D])\**',  # Option **A**
             r'\b([A-D])\b(?!\s*[\w])',  # Single A, B, C, D
@@ -199,7 +199,7 @@ def run_benchmark(args):
             if isinstance(metric_result, dict) and "score" in metric_result:
                 if metric_name not in metric_scores:
                     metric_scores[metric_name] = []
-                metric_scores[metric_result["score"]].append(metric_result["score"])
+                metric_scores[metric_name].append(metric_result["score"])
     
     avg_metric_scores = {metric: sum(scores) / len(scores) if scores else 0 for metric, scores in metric_scores.items()}
     
