@@ -1,69 +1,121 @@
-# Update merit/models/adapters/huggingface.py
+"""
+Enhanced Hugging Face adapter integrated with local models system.
+"""
 from transformers import AutoModelForCausalLM, AutoTokenizer
 import torch
 import os
 from typing import Dict, List, Optional, Union
+from ..local_models import DeviceManager
 
 class HuggingFaceAdapter:
-    """Adapter for Hugging Face models."""
+    """Enhanced adapter for Hugging Face models with better device management."""
     
-    def __init__(self, api_token: str = None, model_name: str = "meta-llama/Meta-Llama-3.1-8B-Instruct", local_path: str = None):
-        """Initialize the Hugging Face adapter."""
+    def __init__(self, api_token: str = None, model_name: str = "microsoft/DialoGPT-medium", 
+                 local_path: str = None, cache_dir: str = None):
+        """Initialize the enhanced Hugging Face adapter."""
         self.api_token = api_token
         self.model_name = model_name
         self.local_path = local_path
+        self.cache_dir = cache_dir or os.path.expanduser("~/.cache/merit_models")
         self.is_local = False
+        self.device = DeviceManager.get_optimal_device()
+        
+        # Model and tokenizer
+        self.model = None
+        self.tokenizer = None
+        
+        print(f"Initializing HuggingFace adapter for {model_name} on {self.device}")
         
         if local_path and os.path.exists(local_path):
-            print(f"Loading model from local path: {local_path}")
+            self._load_local_model(local_path)
+        else:
+            self._load_model_from_hub()
+    
+    def _load_local_model(self, local_path: str):
+        """Load model from local path"""
+        print(f"Loading model from local path: {local_path}")
+        
+        try:
+            # Load tokenizer
+            print("Loading tokenizer...")
+            self.tokenizer = AutoTokenizer.from_pretrained(
+                local_path,
+                local_files_only=True,
+                cache_dir=self.cache_dir
+            )
             
-            try:
-                # Force offline mode
-                os.environ['HF_HUB_OFFLINE'] = '1'
-                os.environ['TRANSFORMERS_OFFLINE'] = '1'
-                
-                # Determine device - use MPS if available on Mac
-                if torch.backends.mps.is_available():
-                    print("Using MPS (Metal) device for Apple Silicon")
-                    device = "mps"
-                else:
-                    print("Using CPU device (MPS not available)")
-                    device = "cpu"
-                    
-                # Load tokenizer
-                print("Loading tokenizer...")
-                self.tokenizer = AutoTokenizer.from_pretrained(
-                    local_path,
-                    local_files_only=True
-                )
-                print("Tokenizer loaded successfully")
-                
-                # Load model with appropriate settings for Mac
-                print(f"Loading model on {device}...")
-                self.model = AutoModelForCausalLM.from_pretrained(
-                    local_path,
-                    torch_dtype=torch.float16,
-                    device_map=device,
-                    local_files_only=True,
-                    low_cpu_mem_usage=True
-                )
-                print("Model loaded successfully")
-                self.is_local = True
-                self.device = device
-            except Exception as e:
-                print(f"Error loading local model: {e}")
-                import traceback
-                traceback.print_exc()
-                self.is_local = False
-                
-                # Fallback to API if desired
-                if api_token:
-                    try:
-                        from huggingface_hub import InferenceClient
-                        self.client = InferenceClient(token=api_token)
-                        print("Falling back to Hugging Face API")
-                    except Exception as api_err:
-                        print(f"Error connecting to Hugging Face API: {api_err}")
+            # Set pad token if needed
+            if self.tokenizer.pad_token is None:
+                self.tokenizer.pad_token = self.tokenizer.eos_token
+            
+            print("Tokenizer loaded successfully")
+            
+            # Get optimal model configuration
+            model_config = DeviceManager.get_model_config("auto", self.device)
+            
+            # Load model
+            print(f"Loading model on {self.device}...")
+            self.model = AutoModelForCausalLM.from_pretrained(
+                local_path,
+                local_files_only=True,
+                cache_dir=self.cache_dir,
+                **model_config
+            )
+            
+            print("✓ Local model loaded successfully")
+            self.is_local = True
+            
+        except Exception as e:
+            print(f"✗ Error loading local model: {e}")
+            self.is_local = False
+            
+            # Fallback to hub
+            if self.api_token:
+                self._fallback_to_api()
+    
+    def _load_model_from_hub(self):
+        """Load model from Hugging Face Hub"""
+        try:
+            print(f"Loading {self.model_name} from Hugging Face Hub...")
+            
+            # Load tokenizer
+            self.tokenizer = AutoTokenizer.from_pretrained(
+                self.model_name,
+                cache_dir=self.cache_dir
+            )
+            
+            # Set pad token if needed
+            if self.tokenizer.pad_token is None:
+                self.tokenizer.pad_token = self.tokenizer.eos_token
+            
+            # Get optimal model configuration
+            model_config = DeviceManager.get_model_config("auto", self.device)
+            
+            # Load model
+            self.model = AutoModelForCausalLM.from_pretrained(
+                self.model_name,
+                cache_dir=self.cache_dir,
+                **model_config
+            )
+            
+            print("✓ Model loaded from hub successfully")
+            self.is_local = True
+            
+        except Exception as e:
+            print(f"✗ Error loading model from hub: {e}")
+            self.is_local = False
+            
+            if self.api_token:
+                self._fallback_to_api()
+    
+    def _fallback_to_api(self):
+        """Fallback to Hugging Face API"""
+        try:
+            from huggingface_hub import InferenceClient
+            self.client = InferenceClient(token=self.api_token)
+            print("Falling back to Hugging Face API")
+        except Exception as api_err:
+            print(f"Error connecting to Hugging Face API: {api_err}")
                 
     def generate(self, prompt: str, max_length: int = 1000, temperature: float = 0.7) -> str:
         """Generate text from a prompt."""

@@ -20,7 +20,6 @@ class GeminiAdapter:
         
         # Set API key and configure
         if api_key:
-            os.environ["GOOGLE_API_KEY"] = api_key
             genai.configure(api_key=api_key)
         elif os.environ.get("GOOGLE_API_KEY"):
             genai.configure(api_key=os.environ.get("GOOGLE_API_KEY"))

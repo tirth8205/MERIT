@@ -38,3 +38,18 @@ dist/
 build/
 *.egg-info/
 extra/test_runs/
+
+# Data and evaluation outputs
+data/
+quick_eval_*/
+
+# Environment and secrets
+.env
+*.json
+!pyproject.json
+
+# Jupyter notebooks checkpoints
+.ipynb_checkpoints/
+
+# Claude Code
+.claude/

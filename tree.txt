@@ -1,0 +1,101 @@
+.
+├── LICENSE
+├── README.md
+├── TECHNICAL_DETAILS.md
+├── data
+│   ├── annotations
+│   │   ├── annotator_0_task_31af4680-4f11-4fa1-9371-f692c05889f5.json
+│   │   ├── annotator_0_task_fd17fa59-556a-47aa-9df9-75c9788def91.json
+│   │   ├── annotator_1_task_31af4680-4f11-4fa1-9371-f692c05889f5.json
+│   │   ├── annotator_1_task_fd17fa59-556a-47aa-9df9-75c9788def91.json
+│   │   ├── task_31af4680-4f11-4fa1-9371-f692c05889f5.json
+│   │   └── task_fd17fa59-556a-47aa-9df9-75c9788def91.json
+│   └── facts.db
+├── extra
+│   ├── benchmark_test.py
+│   ├── test_runs
+│   └── tests
+│       ├── __init__.py
+│       ├── test_evaluation.py
+│       └── test_metrics.py
+├── generate_visualizations.py
+├── merit
+│   ├── __init__.py
+│   ├── benchmark_evaluation.py
+│   ├── cli.py
+│   ├── config
+│   │   ├── __init__.py
+│   │   └── configuration.py
+│   ├── core
+│   │   ├── __init__.py
+│   │   ├── enhanced_metrics.py
+│   │   ├── evaluation.py
+│   │   ├── metrics.py
+│   │   ├── utils.py
+│   │   └── visualization.py
+│   ├── datasets
+│   │   ├── __init__.py
+│   │   └── loaders.py
+│   ├── examples
+│   │   ├── basic_example.py
+│   │   ├── dataset_evaluation.py
+│   │   └── huggingface_example.py
+│   ├── experiments
+│   │   ├── __init__.py
+│   │   └── robust_evaluation.py
+│   ├── knowledge
+│   │   ├── __init__.py
+│   │   └── enhanced_kb.py
+│   ├── models
+│   │   ├── adapters
+│   │   │   ├── __init__.py
+│   │   │   ├── gemini.py
+│   │   │   └── huggingface.py
+│   │   ├── adapters.py
+│   │   ├── local_models.py
+│   │   └── prompts
+│   │       └── __init__.py
+│   ├── utils
+│   │   ├── __init__.py
+│   │   └── common.py
+│   └── validation
+│       ├── __init__.py
+│       ├── baseline_comparison.py
+│       └── human_validation.py
+├── quick_eval_gpt2-medium_arc
+├── quick_eval_gpt2-medium_hellaswag
+├── quick_eval_gpt2-medium_mmlu_logic
+├── quick_eval_gpt2_arc
+│   ├── experiment_config.json
+│   ├── experiment_report.txt
+│   ├── experiment_results.json
+│   └── visualizations
+│       ├── metric_correlations.png
+│       └── statistical_significance.png
+├── requirements.txt
+├── results
+│   ├── full_evaluation
+│   ├── plots
+│   │   ├── error_analysis.png
+│   │   └── merit_comparison.png
+│   ├── report
+│   │   └── merit_evaluation_report.html
+│   ├── task4_full_evaluation.json
+│   └── visualizations
+│       ├── merit_insights.png
+│       ├── merit_metrics_comparison.png
+│       ├── merit_radar_analysis.png
+│       └── merit_statistics_table.png
+├── setup.py
+├── tests
+│   ├── __init__.py
+│   ├── test_cli.py
+│   ├── test_config.py
+│   ├── test_enhanced_metrics.py
+│   ├── test_experiments.py
+│   ├── test_knowledge_base.py
+│   ├── test_local_models.py
+│   └── test_validation.py
+└── tree.txt
+
+29 directories, 70 files
