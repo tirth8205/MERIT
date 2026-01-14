@@ -453,57 +453,64 @@ class TinyLlamaAdapter(LocalModelAdapter):
             return f"Error: {str(e)}"
 
 
-class GPT2Adapter(LocalModelAdapter):
-    """Adapter for GPT-2 model (lightweight baseline)"""
-    
-    def __init__(self, model_size: str = "medium", cache_dir: Optional[str] = None):
-        model_name = f"gpt2-{model_size}" if model_size != "base" else "gpt2"
-        super().__init__(model_name=model_name, cache_dir=cache_dir)
-        self.model_size = model_size
-    
+class Phi2Adapter(LocalModelAdapter):
+    """Adapter for Microsoft Phi-2 model (small but capable instruction model)"""
+
+    def __init__(self, cache_dir: Optional[str] = None):
+        super().__init__(
+            model_name="microsoft/phi-2",
+            cache_dir=cache_dir
+        )
+
     def load_model(self):
-        """Load GPT-2 model"""
+        """Load Phi-2 model"""
         print(f"Loading {self.model_name} on {self.device}...")
-        
+
         try:
             self.tokenizer = AutoTokenizer.from_pretrained(
                 self.model_name,
-                cache_dir=self.cache_dir
+                cache_dir=self.cache_dir,
+                trust_remote_code=True
             )
-            
-            # GPT-2 doesn't have a pad token
-            self.tokenizer.pad_token = self.tokenizer.eos_token
-            
+
+            if self.tokenizer.pad_token is None:
+                self.tokenizer.pad_token = self.tokenizer.eos_token
+
             model_config = {
                 "torch_dtype": torch.float16 if self.device != "cpu" else torch.float32,
+                "low_cpu_mem_usage": True,
+                "trust_remote_code": True
             }
-            
+
             if self.device != "cpu":
                 model_config["device_map"] = self.device
-            
+
             self.model = AutoModelForCausalLM.from_pretrained(
                 self.model_name,
                 cache_dir=self.cache_dir,
                 **model_config
             )
-            
+
             print(f"✓ {self.model_name} loaded successfully")
-            
+
         except Exception as e:
             print(f"✗ Error loading {self.model_name}: {e}")
             raise
-    
+
     def generate(self, prompt: str, max_length: int = 1000, temperature: float = 0.7, **kwargs) -> str:
-        """Generate response using GPT-2"""
+        """Generate response using Phi-2"""
         if self.model is None or self.tokenizer is None:
             self.load_model()
-        
+
         try:
-            inputs = self.tokenizer(prompt, return_tensors="pt")
-            
+            # Phi-2 instruction format
+            formatted_prompt = f"Instruct: {prompt}\nOutput:"
+
+            inputs = self.tokenizer(formatted_prompt, return_tensors="pt", truncation=True, max_length=2048)
+
             if self.device != "cpu":
                 inputs = {k: v.to(self.device) for k, v in inputs.items()}
-            
+
             with torch.no_grad():
                 outputs = self.model.generate(
                     **inputs,
@@ -511,14 +518,98 @@ class GPT2Adapter(LocalModelAdapter):
                     temperature=temperature,
                     do_sample=temperature > 0,
                     pad_token_id=self.tokenizer.eos_token_id,
+                    repetition_penalty=1.1,
                     **kwargs
                 )
-            
+
             generated_text = self.tokenizer.decode(outputs[0], skip_special_tokens=True)
-            response = generated_text[len(prompt):].strip()
-            
+            response = generated_text[len(formatted_prompt):].strip()
+
             return response
-            
+
+        except Exception as e:
+            print(f"Error generating with {self.model_name}: {e}")
+            return f"Error: {str(e)}"
+
+
+class Qwen2Adapter(LocalModelAdapter):
+    """Adapter for Qwen2-0.5B-Instruct model (very small instruction model)"""
+
+    def __init__(self, cache_dir: Optional[str] = None):
+        super().__init__(
+            model_name="Qwen/Qwen2-0.5B-Instruct",
+            cache_dir=cache_dir
+        )
+
+    def load_model(self):
+        """Load Qwen2 model"""
+        print(f"Loading {self.model_name} on {self.device}...")
+
+        try:
+            self.tokenizer = AutoTokenizer.from_pretrained(
+                self.model_name,
+                cache_dir=self.cache_dir,
+                trust_remote_code=True
+            )
+
+            model_config = {
+                "torch_dtype": torch.float16 if self.device != "cpu" else torch.float32,
+                "low_cpu_mem_usage": True,
+                "trust_remote_code": True
+            }
+
+            if self.device != "cpu":
+                model_config["device_map"] = self.device
+
+            self.model = AutoModelForCausalLM.from_pretrained(
+                self.model_name,
+                cache_dir=self.cache_dir,
+                **model_config
+            )
+
+            print(f"✓ {self.model_name} loaded successfully")
+
+        except Exception as e:
+            print(f"✗ Error loading {self.model_name}: {e}")
+            raise
+
+    def generate(self, prompt: str, max_length: int = 1000, temperature: float = 0.7, **kwargs) -> str:
+        """Generate response using Qwen2"""
+        if self.model is None or self.tokenizer is None:
+            self.load_model()
+
+        try:
+            # Qwen2 chat format
+            messages = [{"role": "user", "content": prompt}]
+            formatted_prompt = self.tokenizer.apply_chat_template(
+                messages, tokenize=False, add_generation_prompt=True
+            )
+
+            inputs = self.tokenizer(formatted_prompt, return_tensors="pt", truncation=True, max_length=2048)
+
+            if self.device != "cpu":
+                inputs = {k: v.to(self.device) for k, v in inputs.items()}
+
+            with torch.no_grad():
+                outputs = self.model.generate(
+                    **inputs,
+                    max_new_tokens=max_length,
+                    temperature=temperature,
+                    do_sample=temperature > 0,
+                    pad_token_id=self.tokenizer.eos_token_id,
+                    repetition_penalty=1.1,
+                    **kwargs
+                )
+
+            generated_text = self.tokenizer.decode(outputs[0], skip_special_tokens=True)
+            # Extract just the assistant response
+            if "assistant" in generated_text.lower():
+                response = generated_text.split("assistant")[-1].strip()
+            else:
+                response = generated_text[len(formatted_prompt):].strip()
+
+            return response
+
         except Exception as e:
             print(f"Error generating with {self.model_name}: {e}")
             return f"Error: {str(e)}"
@@ -526,18 +617,19 @@ class GPT2Adapter(LocalModelAdapter):
 
 class ModelManager:
     """Manages multiple local models for comparative evaluation"""
-    
+
     def __init__(self, cache_dir: Optional[str] = None):
         self.cache_dir = cache_dir
         self.available_models = {
+            # All models are instruction-tuned and suitable for reasoning
             "llama2-7b-chat": Llama2ChatAdapter,
             "mistral-7b-instruct": MistralInstructAdapter,
             "tinyllama-1b": TinyLlamaAdapter,
-            "gpt2-medium": lambda cache_dir: GPT2Adapter("medium", cache_dir),
-            "gpt2-large": lambda cache_dir: GPT2Adapter("large", cache_dir)
+            "phi-2": Phi2Adapter,
+            "qwen2-0.5b": Qwen2Adapter,
         }
         self.loaded_models = {}
-        
+
         # Model metadata
         self.model_info = {
             "llama2-7b-chat": {
@@ -548,7 +640,7 @@ class ModelManager:
                 "description": "Meta's Llama-2 7B chat model"
             },
             "mistral-7b-instruct": {
-                "parameters": "7B", 
+                "parameters": "7B",
                 "type": "Instruction-tuned",
                 "memory_requirement": "~14GB",
                 "license": "Apache 2.0",
@@ -557,55 +649,58 @@ class ModelManager:
             "tinyllama-1b": {
                 "parameters": "1.1B",
                 "type": "Chat-tuned",
-                "memory_requirement": "~2GB", 
-                "license": "Apache 2.0",
-                "description": "Lightweight TinyLlama model"
-            },
-            "gpt2-medium": {
-                "parameters": "355M",
-                "type": "Base model",
-                "memory_requirement": "~1GB",
-                "license": "MIT",
-                "description": "OpenAI's GPT-2 medium"
-            },
-            "gpt2-large": {
-                "parameters": "774M", 
-                "type": "Base model",
                 "memory_requirement": "~2GB",
+                "license": "Apache 2.0",
+                "description": "Lightweight TinyLlama chat model - good for quick tests"
+            },
+            "phi-2": {
+                "parameters": "2.7B",
+                "type": "Instruction-tuned",
+                "memory_requirement": "~6GB",
                 "license": "MIT",
-                "description": "OpenAI's GPT-2 large"
+                "description": "Microsoft Phi-2 - excellent reasoning for its size"
+            },
+            "qwen2-0.5b": {
+                "parameters": "0.5B",
+                "type": "Instruction-tuned",
+                "memory_requirement": "~1GB",
+                "license": "Apache 2.0",
+                "description": "Qwen2-0.5B-Instruct - smallest instruction model"
             }
         }
-    
+
     def get_recommended_models(self, memory_constraint_gb: int = 8) -> List[str]:
         """Get recommended models based on memory constraints"""
         recommended = []
-        
+
         if memory_constraint_gb >= 16:
             recommended.extend(["llama2-7b-chat", "mistral-7b-instruct"])
-        
-        if memory_constraint_gb >= 4:
-            recommended.extend(["tinyllama-1b", "gpt2-large"])
-        
+
+        if memory_constraint_gb >= 6:
+            recommended.append("phi-2")
+
         if memory_constraint_gb >= 2:
-            recommended.append("gpt2-medium")
-        
+            recommended.append("tinyllama-1b")
+
+        if memory_constraint_gb >= 1:
+            recommended.append("qwen2-0.5b")
+
         return recommended
-    
+
     def load_model(self, model_name: str) -> LocalModelAdapter:
         """Load a specific model"""
         if model_name not in self.available_models:
             raise ValueError(f"Model {model_name} not available. Options: {list(self.available_models.keys())}")
-        
+
         if model_name in self.loaded_models:
             print(f"Model {model_name} already loaded")
             return self.loaded_models[model_name]
-        
+
         print(f"Loading model: {model_name}")
         adapter_class = self.available_models[model_name]
         adapter = adapter_class(self.cache_dir)
         adapter.load_model()
-        
+
         self.loaded_models[model_name] = adapter
         return adapter
     

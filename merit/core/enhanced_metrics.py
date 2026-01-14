@@ -346,19 +346,12 @@ class EnhancedLogicalConsistencyMetric:
 
 
 class EnhancedFactualAccuracyMetric:
-    """Enhanced factual accuracy metric with Wikipedia and web-based fact checking"""
+    """Enhanced factual accuracy metric with Wikipedia, Wikidata, and web-based fact checking"""
 
-    def __init__(self, cache_only: bool = True):
-        """
-        Initialize factual accuracy metric.
-
-        Args:
-            cache_only: If True (default), only use local KB and cached data - no network calls.
-                       Set to False to enable Wikipedia API lookups (requires internet).
-        """
+    def __init__(self):
+        """Initialize factual accuracy metric with web-based verification."""
         self.name = "factual_accuracy"
-        self.description = "Measures factual accuracy using external knowledge sources"
-        self.cache_only = cache_only
+        self.description = "Measures factual accuracy using Wikipedia, Wikidata, and web search"
 
         # Initialize NLP model
         try:
@@ -367,11 +360,14 @@ class EnhancedFactualAccuracyMetric:
             print("Warning: spaCy model not found. Some features will be limited.")
             self.nlp = None
 
-        # Initialize local knowledge base
-        self.local_kb = self._load_local_knowledge_base()
+        # Cache for lookups (avoids repeated API calls)
+        self.cache = {}
 
-        # Cache for Wikipedia lookups
-        self.wikipedia_cache = {}
+        # Request session for web calls
+        self.session = requests.Session()
+        self.session.headers.update({
+            'User-Agent': 'MERIT-FactChecker/2.0 (Academic Research)'
+        })
     
     def compute(self, prediction: str, reference: Optional[str] = None, **kwargs) -> Dict:
         """Compute enhanced factual accuracy"""
@@ -483,7 +479,7 @@ class EnhancedFactualAccuracyMetric:
         return claims
     
     def _verify_claim(self, claim: Dict) -> Dict:
-        """Verify a factual claim using multiple sources"""
+        """Verify a factual claim using multiple web sources"""
         verification = {
             "claim": claim,
             "verifiable": False,
@@ -491,19 +487,20 @@ class EnhancedFactualAccuracyMetric:
             "confidence": 0.0,
             "sources": []
         }
-        
-        # First check local knowledge base
-        local_result = self._check_local_kb(claim)
-        if local_result["found"]:
+
+        # Try verification sources in order of reliability
+        # 1. Wikidata (structured, most reliable)
+        wikidata_result = self._check_wikidata(claim)
+        if wikidata_result["found"]:
             verification.update({
                 "verifiable": True,
-                "verdict": local_result["verdict"],
-                "confidence": local_result["confidence"],
-                "sources": [{"type": "local_kb", "result": local_result}]
+                "verdict": wikidata_result["verdict"],
+                "confidence": wikidata_result["confidence"],
+                "sources": [{"type": "wikidata", "result": wikidata_result}]
             })
             return verification
-        
-        # Check Wikipedia
+
+        # 2. Wikipedia (detailed text)
         wikipedia_result = self._check_wikipedia(claim)
         if wikipedia_result["found"]:
             verification.update({
@@ -512,122 +509,188 @@ class EnhancedFactualAccuracyMetric:
                 "confidence": wikipedia_result["confidence"],
                 "sources": [{"type": "wikipedia", "result": wikipedia_result}]
             })
-        
+            return verification
+
+        # 3. DuckDuckGo Instant Answers (broad coverage)
+        ddg_result = self._check_duckduckgo(claim)
+        if ddg_result["found"]:
+            verification.update({
+                "verifiable": True,
+                "verdict": ddg_result["verdict"],
+                "confidence": ddg_result["confidence"],
+                "sources": [{"type": "duckduckgo", "result": ddg_result}]
+            })
+            return verification
+
         return verification
-    
-    def _check_local_kb(self, claim: Dict) -> Dict:
-        """Check claim against local knowledge base"""
+
+    def _check_wikidata(self, claim: Dict) -> Dict:
+        """Check claim against Wikidata structured knowledge base"""
         result = {"found": False, "verdict": "unverifiable", "confidence": 0.0}
-        
-        # Simple string matching for now - can be enhanced
-        claim_text = f"{claim['subject']} {claim['predicate']} {claim['object']}".lower()
-        
-        for fact, is_true in self.local_kb.items():
-            if fact.lower() in claim_text or claim_text in fact.lower():
-                result["found"] = True
-                result["verdict"] = "correct" if is_true else "incorrect"
-                result["confidence"] = 0.9
-                result["matched_fact"] = fact
-                break
-        
+
+        try:
+            subject = claim["subject"]
+            cache_key = f"wikidata:{subject}"
+
+            if cache_key in self.cache:
+                entity_data = self.cache[cache_key]
+            else:
+                # Search for entity in Wikidata
+                search_url = "https://www.wikidata.org/w/api.php"
+                search_params = {
+                    "action": "wbsearchentities",
+                    "search": subject,
+                    "language": "en",
+                    "format": "json",
+                    "limit": 1
+                }
+
+                response = self.session.get(search_url, params=search_params, timeout=10)
+                search_data = response.json()
+
+                if not search_data.get("search"):
+                    return result
+
+                entity_id = search_data["search"][0]["id"]
+
+                # Get entity details
+                entity_url = "https://www.wikidata.org/w/api.php"
+                entity_params = {
+                    "action": "wbgetentities",
+                    "ids": entity_id,
+                    "languages": "en",
+                    "format": "json"
+                }
+
+                response = self.session.get(entity_url, params=entity_params, timeout=10)
+                entity_data = response.json()
+                self.cache[cache_key] = entity_data
+
+            # Extract claims from entity
+            if "entities" in entity_data:
+                entity = list(entity_data["entities"].values())[0]
+                description = entity.get("descriptions", {}).get("en", {}).get("value", "").lower()
+                label = entity.get("labels", {}).get("en", {}).get("value", "").lower()
+
+                # Check if claim object matches entity description or label
+                obj_lower = claim["object"].lower()
+                if obj_lower in description or obj_lower in label:
+                    result["found"] = True
+                    result["verdict"] = "correct"
+                    result["confidence"] = 0.85
+                    result["entity_description"] = description
+                    result["entity_label"] = label
+
+        except Exception as e:
+            pass  # Silently fail, try next source
+
         return result
-    
+
     def _check_wikipedia(self, claim: Dict) -> Dict:
         """Check claim against Wikipedia"""
         result = {"found": False, "verdict": "unverifiable", "confidence": 0.0}
 
         try:
-            # Search for the subject on Wikipedia
             subject = claim["subject"]
+            cache_key = f"wikipedia:{subject}"
 
-            # Use cache to avoid repeated API calls
-            if subject in self.wikipedia_cache:
-                page_content = self.wikipedia_cache[subject]
-            elif self.cache_only:
-                # In cache_only mode, skip Wikipedia lookup if not cached
-                return result
+            if cache_key in self.cache:
+                page_content = self.cache[cache_key]
             else:
                 try:
                     page = wikipedia.page(subject, auto_suggest=True)
                     page_content = page.content.lower()
-                    self.wikipedia_cache[subject] = page_content
-                except:
-                    # Try summary instead
+                    self.cache[cache_key] = page_content
+                except wikipedia.DisambiguationError as e:
+                    # Try first suggestion
                     try:
-                        page_content = wikipedia.summary(subject, sentences=5).lower()
-                        self.wikipedia_cache[subject] = page_content
+                        page = wikipedia.page(e.options[0])
+                        page_content = page.content.lower()
+                        self.cache[cache_key] = page_content
                     except:
                         return result
-            
-            # Check if the claim is supported by the Wikipedia content
+                except wikipedia.PageError:
+                    # Try summary instead
+                    try:
+                        page_content = wikipedia.summary(subject, sentences=10).lower()
+                        self.cache[cache_key] = page_content
+                    except:
+                        return result
+
+            # Check if the claim is supported by Wikipedia content
             obj_lower = claim["object"].lower()
-            
-            # Simple keyword matching - can be enhanced with semantic similarity
+
             if obj_lower in page_content:
-                # Try to find the context around the object
+                # Find supporting context
                 sentences = page_content.split('.')
-                supporting_sentences = [s for s in sentences if obj_lower in s]
-                
-                if supporting_sentences:
+                supporting = [s.strip() for s in sentences if obj_lower in s][:2]
+
+                if supporting:
                     result["found"] = True
-                    result["verdict"] = "correct"  # Assume correct if found
-                    result["confidence"] = 0.7
-                    result["supporting_text"] = supporting_sentences[:2]  # First 2 supporting sentences
-            
+                    result["verdict"] = "correct"
+                    result["confidence"] = 0.75
+                    result["supporting_text"] = supporting
+
         except Exception as e:
-            print(f"Error checking Wikipedia: {e}")
-        
+            pass  # Silently fail, try next source
+
         return result
-    
-    def _load_local_knowledge_base(self) -> Dict[str, bool]:
-        """Load and expand local knowledge base"""
-        # Enhanced knowledge base with more facts
-        kb = {
-            # Basic facts
-            "earth revolves around sun": True,
-            "sun revolves around earth": False,
-            "water is h2o": True,
-            "humans have 3 legs": False,
-            
-            # Scientific facts
-            "speed of light is approximately 300000000 meters per second": True,
-            "gravity pulls objects towards earth": True,
-            "photosynthesis produces oxygen": True,
-            "DNA contains genetic information": True,
-            "atoms are made of protons neutrons and electrons": True,
-            
-            # Mathematical facts
-            "pi is approximately 3.14159": True,
-            "square root of 16 is 4": True,
-            "2 plus 2 equals 5": False,
-            
-            # Historical facts
-            "world war 2 ended in 1945": True,
-            "christopher columbus discovered america in 1492": True,
-            "berlin wall fell in 1989": True,
-            
-            # Geographical facts
-            "mount everest is the highest mountain": True,
-            "pacific ocean is the largest ocean": True,
-            "sahara is in africa": True,
-            
-            # Common misconceptions
-            "great wall of china visible from space": False,
-            "humans only use 10 percent of brain": False,
-            "lightning never strikes same place twice": False
-        }
-        
-        # Try to load additional facts from file if available
-        kb_file = "data/knowledge_base.json"
-        if os.path.exists(kb_file):
-            try:
-                with open(kb_file, 'r') as f:
-                    additional_kb = json.load(f)
-                    kb.update(additional_kb)
-            except Exception as e:
-                print(f"Error loading additional knowledge base: {e}")
-        
-        return kb
+
+    def _check_duckduckgo(self, claim: Dict) -> Dict:
+        """Check claim using DuckDuckGo Instant Answer API"""
+        result = {"found": False, "verdict": "unverifiable", "confidence": 0.0}
+
+        try:
+            # Construct search query from claim
+            query = f"{claim['subject']} {claim['object']}"
+            cache_key = f"ddg:{query}"
+
+            if cache_key in self.cache:
+                ddg_data = self.cache[cache_key]
+            else:
+                ddg_url = "https://api.duckduckgo.com/"
+                params = {
+                    "q": query,
+                    "format": "json",
+                    "no_html": 1,
+                    "skip_disambig": 1
+                }
+
+                response = self.session.get(ddg_url, params=params, timeout=10)
+                ddg_data = response.json()
+                self.cache[cache_key] = ddg_data
+
+            # Check Abstract, Answer, and Definition fields
+            abstract = ddg_data.get("Abstract", "").lower()
+            answer = ddg_data.get("Answer", "").lower()
+            definition = ddg_data.get("Definition", "").lower()
+
+            combined_text = f"{abstract} {answer} {definition}"
+            obj_lower = claim["object"].lower()
+
+            if obj_lower in combined_text:
+                result["found"] = True
+                result["verdict"] = "correct"
+                result["confidence"] = 0.65
+                result["source_url"] = ddg_data.get("AbstractURL", "")
+                result["abstract"] = abstract[:200] if abstract else None
+
+            # Also check Related Topics
+            related = ddg_data.get("RelatedTopics", [])
+            for topic in related[:5]:
+                if isinstance(topic, dict):
+                    topic_text = topic.get("Text", "").lower()
+                    if obj_lower in topic_text:
+                        result["found"] = True
+                        result["verdict"] = "correct"
+                        result["confidence"] = 0.55
+                        result["related_topic"] = topic_text[:200]
+                        break
+
+        except Exception as e:
+            pass  # Silently fail
+
+        return result
 
 
 class EnhancedReasoningStepMetric:
