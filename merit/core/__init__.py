@@ -10,10 +10,16 @@ from .device import DeviceManager
 # imported independently.
 def __getattr__(name):
     _lazy_imports = {
-        "EnhancedLogicalConsistencyMetric": ".enhanced_metrics",
-        "EnhancedFactualAccuracyMetric": ".enhanced_metrics",
-        "EnhancedReasoningStepMetric": ".enhanced_metrics",
-        "EnhancedAlignmentMetric": ".enhanced_metrics",
+        # New canonical names (one file per metric)
+        "LogicalConsistencyMetric": ".consistency",
+        "FactualAccuracyMetric": ".factual",
+        "ReasoningStepMetric": ".reasoning",
+        "AlignmentMetric": ".alignment",
+        # Backward-compat aliases (old "Enhanced*" names)
+        "EnhancedLogicalConsistencyMetric": ".consistency",
+        "EnhancedFactualAccuracyMetric": ".factual",
+        "EnhancedReasoningStepMetric": ".reasoning",
+        "EnhancedAlignmentMetric": ".alignment",
     }
     if name in _lazy_imports:
         import importlib
@@ -26,6 +32,12 @@ __all__ = [
     "BaseMetric",
     "MetricResult",
     "DeviceManager",
+    # New canonical names
+    "LogicalConsistencyMetric",
+    "FactualAccuracyMetric",
+    "ReasoningStepMetric",
+    "AlignmentMetric",
+    # Backward-compat aliases
     "EnhancedLogicalConsistencyMetric",
     "EnhancedFactualAccuracyMetric",
     "EnhancedReasoningStepMetric",
