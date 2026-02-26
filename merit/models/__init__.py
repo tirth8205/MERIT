@@ -1,7 +1,18 @@
-"""
-Model management for MERIT.
-"""
+"""Model management for MERIT."""
 
-from .local_models import ModelManager
+from .base import BaseModelAdapter
 
-__all__ = ["ModelManager"]
+
+# Lazy imports for heavy modules
+def __getattr__(name):
+    _lazy_imports = {
+        "ModelManager": ".local_models",
+    }
+    if name in _lazy_imports:
+        import importlib
+        module = importlib.import_module(_lazy_imports[name], __name__)
+        return getattr(module, name)
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+
+
+__all__ = ["BaseModelAdapter", "ModelManager"]

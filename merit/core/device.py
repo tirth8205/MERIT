@@ -1,5 +1,9 @@
-"""Device management for optimal hardware utilization."""
-import torch
+"""Device management for optimal hardware utilization.
+
+Note: torch is imported lazily inside methods since every consumer of
+DeviceManager already depends on torch, but we avoid top-level import
+to keep the module lightweight when only type-checking.
+"""
 
 
 class DeviceManager:
@@ -7,6 +11,9 @@ class DeviceManager:
 
     @staticmethod
     def get_optimal_device() -> str:
+        """Get the best available compute device (MPS > CUDA > CPU)."""
+        import torch
+
         if torch.backends.mps.is_available():
             return "mps"
         elif torch.cuda.is_available():
@@ -15,6 +22,9 @@ class DeviceManager:
 
     @staticmethod
     def get_model_kwargs(device: str) -> dict:
+        """Get model kwargs optimized for the given device."""
+        import torch
+
         if device in ("mps", "cuda"):
             return {"device": device, "torch_dtype": torch.float16}
         return {"device": device, "torch_dtype": torch.float32}

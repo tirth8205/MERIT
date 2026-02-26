@@ -1,6 +1,8 @@
-"""
-Core metrics for MERIT evaluation.
-"""
+"""Core metrics for MERIT evaluation."""
+
+# Lightweight base classes — safe to import eagerly (no heavy deps)
+from .base import BaseMetric, MetricResult
+from .device import DeviceManager
 
 
 # Lazy imports — avoid loading heavy dependencies (spacy, torch, nltk) at
@@ -21,6 +23,9 @@ def __getattr__(name):
 
 
 __all__ = [
+    "BaseMetric",
+    "MetricResult",
+    "DeviceManager",
     "EnhancedLogicalConsistencyMetric",
     "EnhancedFactualAccuracyMetric",
     "EnhancedReasoningStepMetric",

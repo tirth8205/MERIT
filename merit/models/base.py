@@ -1,6 +1,5 @@
 """Base model adapter abstraction."""
 from abc import ABC, abstractmethod
-from typing import Optional
 
 
 class BaseModelAdapter(ABC):
@@ -8,13 +7,21 @@ class BaseModelAdapter(ABC):
 
     @property
     @abstractmethod
-    def model_name(self) -> str: ...
+    def model_name(self) -> str:
+        """Human-readable identifier for this model."""
+        ...
 
     @abstractmethod
-    def load_model(self) -> None: ...
+    def load_model(self) -> None:
+        """Load the model into memory (CPU/GPU). Idempotent."""
+        ...
 
     @abstractmethod
-    def generate(self, prompt: str, max_length: int = 512, temperature: float = 0.7) -> str: ...
+    def generate(self, prompt: str, max_length: int = 512, temperature: float = 0.7) -> str:
+        """Generate text from the given prompt. Model must be loaded first."""
+        ...
 
     @abstractmethod
-    def unload_model(self) -> None: ...
+    def unload_model(self) -> None:
+        """Release model resources and free GPU/CPU memory."""
+        ...
