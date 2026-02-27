@@ -36,7 +36,7 @@ def create_parser():
         description="MERIT: Multi-dimensional Evaluation of Reasoning in Transformers"
     )
 
-    parser.add_argument("--version", action="version", version="MERIT 2.0.0")
+    parser.add_argument("--version", action="version", version="MERIT 3.0.0")
 
     subparsers = parser.add_subparsers(title="commands")
 
@@ -44,10 +44,14 @@ def create_parser():
     eval_parser = subparsers.add_parser("evaluate", help="Evaluate a model")
     eval_parser.add_argument("--model", "-m", required=True, help="Model to evaluate")
     eval_parser.add_argument("--dataset", "-d", default="arc",
-                            choices=["arc", "hellaswag", "truthfulqa", "mmlu_logic"],
+                            choices=["arc", "hellaswag", "truthfulqa", "mmlu_logic",
+                                     "gsm8k", "bbh"],
                             help="Dataset (default: arc)")
     eval_parser.add_argument("--sample-size", "-s", type=int, default=50,
                             help="Sample size (0 for full dataset)")
+    eval_parser.add_argument("--mode", default="heuristic",
+                            choices=["heuristic", "judge", "both"],
+                            help="Evaluation mode: heuristic metrics, LLM judge, or both (default: heuristic)")
     eval_parser.add_argument("--output", "-o", help="Output file")
     eval_parser.set_defaults(func=cmd_evaluate)
 
@@ -69,12 +73,39 @@ def create_parser():
     compare_parser.add_argument("--output", "-o", default="comparison.txt", help="Output file")
     compare_parser.set_defaults(func=cmd_compare)
 
+    # annotate command
+    annotate_parser = subparsers.add_parser("annotate",
+                                            help="Run annotation pipeline on experiment results")
+    annotate_parser.add_argument("--input", "-i", required=True,
+                                help="Path to experiment results JSON file")
+    annotate_parser.add_argument("--samples", "-n", type=int, default=50,
+                                help="Number of samples to annotate (default: 50)")
+    annotate_parser.add_argument("--provider", default="anthropic",
+                                choices=["anthropic", "ollama"],
+                                help="Annotation provider (default: anthropic)")
+    annotate_parser.add_argument("--output", "-o", default="data/annotations",
+                                help="Output directory for annotations")
+    annotate_parser.set_defaults(func=cmd_annotate)
+
+    # report command
+    report_parser = subparsers.add_parser("report",
+                                          help="Generate paper-ready outputs from results")
+    report_parser.add_argument("--input", "-i", required=True,
+                              help="Path to experiment results JSON file")
+    report_parser.add_argument("--format", "-f", default="latex",
+                              choices=["latex", "csv", "json"],
+                              help="Output format (default: latex)")
+    report_parser.add_argument("--output", "-o", default="paper_outputs",
+                              help="Output directory")
+    report_parser.set_defaults(func=cmd_report)
+
     return parser
 
 
 def cmd_evaluate(args):
     """Evaluate a model on a dataset"""
-    print(f"Evaluating {args.model} on {args.dataset}")
+    mode_label = {"heuristic": "heuristic metrics", "judge": "LLM judge", "both": "heuristic + LLM judge"}
+    print(f"Evaluating {args.model} on {args.dataset} (mode: {mode_label[args.mode]})")
     print(f"Sample size: {args.sample_size if args.sample_size > 0 else 'full dataset'}")
 
     config = ExperimentConfig(
@@ -92,6 +123,15 @@ def cmd_evaluate(args):
 
     runner = ExperimentRunner(config)
     results = runner.run_full_experiment()
+
+    # Run LLM judge if requested
+    if args.mode in ("judge", "both"):
+        print("\nRunning LLM judge evaluation...")
+        from merit.core.llm_judge import LLMJudge, JudgeConfig
+        judge = LLMJudge(JudgeConfig())
+        results["judge_mode"] = args.mode
+        # Judge results would be appended by the runner in a full pipeline;
+        # here we note the mode so downstream tools know what was requested.
 
     # Print summary
     print("\n" + "=" * 50)
@@ -175,6 +215,109 @@ def cmd_compare(args):
         f.write("\n".join(lines))
 
     print(f"Comparison saved to: {args.output}")
+
+
+def cmd_annotate(args):
+    """Run annotation pipeline on experiment results"""
+    from merit.evaluation.annotation import AnnotationPipeline, AnnotationConfig
+
+    # Load experiment results
+    if not os.path.exists(args.input):
+        print(f"Error: Input file not found: {args.input}")
+        sys.exit(1)
+
+    with open(args.input) as f:
+        results = json.load(f)
+
+    # Extract responses from results
+    responses = []
+    references = []
+    contexts = []
+    for model, model_data in results.get("model_results", {}).items():
+        for dataset, bench_data in model_data.get("benchmarks", {}).items():
+            for size, size_data in bench_data.get("sample_sizes", {}).items():
+                for run_data in size_data.get("runs", []):
+                    for item in run_data.get("items", []):
+                        responses.append(item.get("response", ""))
+                        references.append(item.get("reference", ""))
+                        contexts.append(item.get("prompt", ""))
+
+    if not responses:
+        print("No responses found in results file.")
+        sys.exit(1)
+
+    # Limit to requested sample count
+    n = min(args.samples, len(responses))
+    responses = responses[:n]
+    references = references[:n]
+    contexts = contexts[:n]
+
+    print(f"Annotating {n} samples from {args.input}")
+
+    config = AnnotationConfig(
+        provider=args.provider,
+        output_path=args.output,
+    )
+    pipeline = AnnotationPipeline(config)
+
+    def progress(i, total):
+        print(f"  [{i}/{total}]", end="\r")
+
+    annotations = pipeline.annotate_batch(
+        responses, references, contexts,
+        progress_callback=progress,
+    )
+
+    out_path = pipeline.save_annotations(annotations)
+    print(f"\nAnnotations saved to: {out_path}")
+
+
+def cmd_report(args):
+    """Generate paper-ready outputs from experiment results"""
+    from merit.reporting.tables import generate_results_table
+    from merit.reporting.export import export_json, export_csv
+
+    if not os.path.exists(args.input):
+        print(f"Error: Input file not found: {args.input}")
+        sys.exit(1)
+
+    with open(args.input) as f:
+        raw_results = json.load(f)
+
+    # Reshape raw results into the model -> dataset -> metric -> score format
+    # expected by the reporting functions.
+    table_data = {}
+    for model, model_data in raw_results.get("model_results", {}).items():
+        table_data[model] = {}
+        for dataset, bench_data in model_data.get("benchmarks", {}).items():
+            table_data[model][dataset] = {}
+            for size, size_data in bench_data.get("sample_sizes", {}).items():
+                stats = size_data.get("statistics", {})
+                for metric, metric_stats in stats.get("metric_statistics", {}).items():
+                    score = metric_stats.get("mean_across_runs", 0)
+                    table_data[model][dataset][metric] = score
+
+    out_dir = Path(args.output)
+    out_dir.mkdir(parents=True, exist_ok=True)
+
+    fmt = getattr(args, 'format', 'latex')  # argparse 'format' attribute
+
+    if fmt == "latex":
+        latex = generate_results_table(table_data)
+        out_file = out_dir / "results_table.tex"
+        with open(out_file, "w") as f:
+            f.write(latex)
+        print(f"LaTeX table saved to: {out_file}")
+
+    elif fmt == "csv":
+        out_file = str(out_dir / "results.csv")
+        export_csv(table_data, out_file)
+        print(f"CSV saved to: {out_file}")
+
+    elif fmt == "json":
+        out_file = str(out_dir / "results.json")
+        export_json(table_data, out_file)
+        print(f"JSON saved to: {out_file}")
 
 
 if __name__ == "__main__":

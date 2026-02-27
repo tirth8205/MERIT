@@ -18,6 +18,8 @@ from merit.cli import (
     cmd_list_models,
     cmd_test_model,
     cmd_compare,
+    cmd_annotate,
+    cmd_report,
 )
 
 
@@ -52,6 +54,49 @@ class TestCLIParser:
         assert args.model == "gpt2"
         assert args.dataset == "arc"  # default
         assert args.sample_size == 50  # default
+        assert args.mode == "heuristic"  # default
+
+    def test_parser_evaluate_mode(self):
+        """Test evaluate --mode argument"""
+        parser = create_parser()
+
+        for mode in ["heuristic", "judge", "both"]:
+            args = parser.parse_args(["evaluate", "--model", "gpt2", "--mode", mode])
+            assert args.mode == mode
+
+    def test_parser_evaluate_new_datasets(self):
+        """Test evaluate with GSM8K and BBH datasets"""
+        parser = create_parser()
+
+        for ds in ["gsm8k", "bbh"]:
+            args = parser.parse_args(["evaluate", "--model", "gpt2", "--dataset", ds])
+            assert args.dataset == ds
+
+    def test_parser_subcommands_annotate(self):
+        """Test annotate subcommand parsing"""
+        parser = create_parser()
+
+        args = parser.parse_args(["annotate", "--input", "results.json"])
+        assert hasattr(args, 'func')
+        assert getattr(args, 'input') == "results.json"
+        assert args.samples == 50  # default
+
+        args = parser.parse_args(["annotate", "-i", "results.json", "--samples", "100"])
+        assert args.samples == 100
+
+    def test_parser_subcommands_report(self):
+        """Test report subcommand parsing"""
+        parser = create_parser()
+
+        args = parser.parse_args(["report", "--input", "results.json"])
+        assert hasattr(args, 'func')
+        assert getattr(args, 'input') == "results.json"
+        assert getattr(args, 'format') == "latex"  # default
+        assert args.output == "paper_outputs"  # default
+
+        for fmt in ["latex", "csv", "json"]:
+            args = parser.parse_args(["report", "-i", "r.json", "--format", fmt])
+            assert getattr(args, 'format') == fmt
 
     def test_parser_subcommands_models_list(self):
         """Test models list subcommand parsing"""
@@ -86,6 +131,7 @@ class TestEvaluateCommand:
         args.model = "gpt2"
         args.dataset = "arc"
         args.sample_size = 10
+        args.mode = "heuristic"
         args.output = None
 
         mock_runner = Mock()
@@ -122,6 +168,7 @@ class TestEvaluateCommand:
         args.model = "gpt2"
         args.dataset = "arc"
         args.sample_size = 5
+        args.mode = "heuristic"
         args.output = "results.json"
 
         mock_runner = Mock()
@@ -340,6 +387,8 @@ class TestCLIIntegration:
     ("evaluate", ["--model", "gpt2"]),
     ("models", ["list"]),
     ("compare", ["file.json"]),
+    ("annotate", ["--input", "results.json"]),
+    ("report", ["--input", "results.json"]),
 ])
 def test_all_commands_have_func_attribute(command, args):
     """Test that all commands have func attribute set"""

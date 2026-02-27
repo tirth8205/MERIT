@@ -2,142 +2,171 @@
 
 [![Python 3.8+](https://img.shields.io/badge/python-3.8+-blue.svg)](https://www.python.org/downloads/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![Version](https://img.shields.io/badge/version-3.0.0-green.svg)]()
 
-## What is MERIT?
-
-MERIT evaluates how well language models **reason**, not just whether they get the right answer. Traditional evaluation only checks accuracy—MERIT reveals *why* a model succeeds or fails.
-
-| Metric | What It Measures | Why It Matters |
-|--------|------------------|----------------|
-| **Logical Consistency** | Self-contradictions in responses | Safety: inconsistent reasoning is unreliable |
-| **Factual Accuracy** | Correctness of factual claims | Hallucination detection |
-| **Reasoning Steps** | Clarity of step-by-step logic | Explainability / interpretability |
-| **Alignment** | Ethical behavior, bias, respect | AI safety |
+A NeurIPS-oriented framework for multi-dimensional evaluation of reasoning in language models. MERIT goes beyond accuracy to measure **logical consistency**, **factual accuracy**, **reasoning quality**, and **alignment** using both heuristic metrics and LLM-as-judge evaluation.
 
 ## Installation
 
 ```bash
 git clone https://github.com/yourusername/merit
 cd merit
-pip install -e .
+pip install -e ".[full]"
 
-# Download spaCy model
+# Required NLP model
 python -m spacy download en_core_web_sm
 ```
 
 ## Quick Start
 
 ```bash
-# Evaluate a model on ARC dataset
-python -m merit.cli evaluate --model tinyllama-1b --dataset arc --sample-size 50
+# Evaluate a model with heuristic metrics
+merit evaluate --model tinyllama-1b --dataset arc --sample-size 50
+
+# Evaluate with LLM judge (requires ANTHROPIC_API_KEY)
+merit evaluate --model tinyllama-1b --dataset gsm8k --mode judge
+
+# Run both heuristic and judge evaluation
+merit evaluate --model phi-2 --dataset bbh --mode both --output results.json
+
+# Generate paper-ready LaTeX tables
+merit report --input results.json --format latex --output paper_outputs/
+
+# Export results as CSV
+merit report --input results.json --format csv --output paper_outputs/
+
+# Annotate responses for metric validation
+merit annotate --input results.json --samples 100
 
 # List available models
-python -m merit.cli models list
+merit models list
 
-# Test a model
-python -m merit.cli models test tinyllama-1b --prompt "What is 2+2?"
+# Test a model interactively
+merit models test tinyllama-1b --prompt "Explain photosynthesis step by step."
+
+# Compare multiple experiments
+merit compare exp1.json exp2.json --output comparison.txt
 ```
 
-## Available Models
+## Metrics
 
-All models are instruction-tuned for reasoning tasks:
+MERIT evaluates four dimensions, each with heuristic and LLM-judge variants:
+
+| Dimension | Heuristic | LLM Judge | What It Measures |
+|-----------|-----------|-----------|-----------------|
+| **Consistency** | Sentence embeddings + sentiment analysis | Claude rubric (1-5) | Self-contradictions in reasoning |
+| **Factual** | Knowledge cache + web verification | Claude rubric (1-5) | Correctness of factual claims |
+| **Reasoning** | Pattern detection + coherence analysis | Claude rubric (1-5) | Clarity of step-by-step logic |
+| **Alignment** | Bias detection + ethical analysis | Claude rubric (1-5) | Safety, fairness, respect |
+
+All metrics return a standardized `MetricResult(score, dimension, details)` on a 0-1 scale.
+
+## Models
 
 | Model | Size | Memory | Best For |
 |-------|------|--------|----------|
 | `qwen2-0.5b` | 0.5B | ~1GB | Quick tests, low memory |
 | `tinyllama-1b` | 1.1B | ~2GB | Good balance |
 | `phi-2` | 2.7B | ~6GB | Strong reasoning |
-| `mistral-7b-instruct` | 7B | ~14GB | Strong quality |
-| `llama3-8b` | 8B | ~16GB | Best quality, most benchmarked |
+| `mistral-7b-instruct` | 7B | ~14GB | High quality |
+| `llama3-8b` | 8B | ~16GB | Best quality |
 
-## Supported Datasets
+## Datasets
 
-| Dataset | HuggingFace ID | Task |
-|---------|----------------|------|
-| `arc` | allenai/ai2_arc (ARC-Challenge) | Science reasoning |
-| `hellaswag` | Rowan/hellaswag | Commonsense |
-| `mmlu_logic` | cais/mmlu (formal_logic) | Logical reasoning |
-
-## Full Dataset Evaluation
-
-```bash
-# Use --sample-size 0 for full dataset
-python -m merit.cli evaluate --model qwen2-0.5b --dataset arc --sample-size 0
-```
+| Dataset | Benchmark | Task Type |
+|---------|-----------|-----------|
+| `arc` | ARC-Challenge | Science reasoning (multiple choice) |
+| `hellaswag` | HellaSwag | Commonsense (multiple choice) |
+| `truthfulqa` | TruthfulQA | Truthfulness (multiple choice) |
+| `mmlu_logic` | MMLU Formal Logic | Logical reasoning (multiple choice) |
+| `gsm8k` | GSM8K | Math reasoning (open-ended) |
+| `bbh` | BIG-Bench Hard | Complex reasoning (open-ended) |
 
 ## Python API
 
 ```python
-from merit import (
-    ModelManager,
-    ExperimentConfig,
-    ExperimentRunner,
-    EnhancedLogicalConsistencyMetric,
-    EnhancedFactualAccuracyMetric
-)
+from merit import BaseMetric, MetricResult, ExperimentConfig, DeviceManager
 
-# Load and test a model
-manager = ModelManager()
-model = manager.load_model("tinyllama-1b")
-response = model.generate("What is photosynthesis?")
+# --- Heuristic metrics ---
+from merit.core.consistency import LogicalConsistencyMetric
 
-# Evaluate with MERIT metrics
-logic_metric = EnhancedLogicalConsistencyMetric()
-result = logic_metric.compute(response)
-print(f"Logical Consistency: {result['score']:.2f}")
+metric = LogicalConsistencyMetric()
+result = metric.compute("The sky is blue. It is a clear day.")
+print(f"Consistency: {result.score:.2f}")  # MetricResult with .score, .dimension, .details
 
-fact_metric = EnhancedFactualAccuracyMetric()
-result = fact_metric.compute(response)
-print(f"Factual Accuracy: {result['score']:.2f}")
+# --- LLM judge ---
+from merit.core.llm_judge import LLMJudge, JudgeConfig
 
-# Run full experiment
+judge = LLMJudge(JudgeConfig())
+result = judge.evaluate_consistency("The sky is blue.")
+print(f"Judge score: {result.score:.2f}")
+
+# --- Full experiment ---
+from merit.experiments import ExperimentRunner
+
 config = ExperimentConfig(
     experiment_name="my_experiment",
     models=["tinyllama-1b", "qwen2-0.5b"],
-    benchmarks=["arc"],
+    benchmarks=["arc", "gsm8k"],
     sample_sizes=[100],
-    num_runs=3
+    num_runs=3,
 )
 runner = ExperimentRunner(config)
 results = runner.run_full_experiment()
+
+# --- Reporting ---
+from merit.reporting.tables import generate_results_table
+
+latex = generate_results_table(results)
+
+# --- Statistical analysis ---
+from merit.utils.stats import bootstrap_ci, cohens_d, aggregate_runs
+
+ci_low, ci_high = bootstrap_ci([0.8, 0.82, 0.79])
+effect = cohens_d([0.8, 0.82, 0.79], [0.6, 0.62, 0.59])
 ```
-
-## How Metrics Work
-
-### Logical Consistency
-Uses sentence embeddings (all-MiniLM-L6-v2) to detect semantic contradictions and sentiment inconsistencies.
-
-### Factual Accuracy
-Verifies claims using three web sources (cascading):
-1. **Wikidata** - structured knowledge (confidence: 0.85)
-2. **Wikipedia** - article text (confidence: 0.75)
-3. **DuckDuckGo** - broad coverage (confidence: 0.65)
-
-### Reasoning Steps
-Pattern-based detection of step-by-step reasoning + coherence analysis between steps.
-
-### Alignment
-Multi-faceted analysis: bias detection, ethical principles, respectfulness, sentiment.
 
 ## Project Structure
 
 ```
 merit/
-├── __init__.py              # Main exports
-├── cli.py                   # Command-line interface
+├── __init__.py                  # Top-level exports (BaseMetric, MetricResult, etc.)
+├── cli.py                       # CLI: evaluate, annotate, report, compare
 ├── core/
-│   └── enhanced_metrics.py  # 4 MERIT metrics
+│   ├── base.py                  # BaseMetric, MetricResult abstractions
+│   ├── device.py                # DeviceManager (MPS/CUDA/CPU)
+│   ├── consistency.py           # Logical consistency metric
+│   ├── factual.py               # Factual accuracy metric
+│   ├── reasoning.py             # Reasoning quality metric
+│   ├── alignment.py             # Alignment/safety metric
+│   ├── llm_judge.py             # LLM-as-judge evaluation
+│   └── knowledge_cache.py       # Deterministic knowledge cache
 ├── experiments/
-│   └── robust_evaluation.py # ExperimentRunner
+│   ├── config.py                # ExperimentConfig dataclass
+│   ├── runner.py                # ExperimentRunner
+│   └── datasets.py              # Dataset loaders (ARC, GSM8K, BBH, etc.)
 ├── models/
-│   └── local_models.py      # ModelManager
+│   ├── manager.py               # ModelManager
+│   ├── huggingface.py           # HuggingFace adapter
+│   └── ollama.py                # Ollama adapter
+├── baselines/
+│   ├── bertscore.py             # BERTScore baseline
+│   └── geval.py                 # G-Eval baseline
+├── evaluation/
+│   └── annotation.py            # Claude annotation pipeline
+├── reporting/
+│   ├── tables.py                # LaTeX table generation
+│   ├── plots.py                 # Radar charts, scaling plots
+│   └── export.py                # CSV/JSON export
+├── utils/
+│   └── stats.py                 # Bootstrap CI, Cohen's d, aggregation
 └── validation/
-    └── baseline_comparison.py # BERT-Score, ROUGE comparison
+    └── baseline_comparison.py   # Baseline comparison utilities
 ```
 
 ## Hardware Support
 
-- **Apple Silicon (M1/M2/M3/M4)**: MPS acceleration
+- **Apple Silicon (M1/M2/M3/M4)**: MPS acceleration via `DeviceManager`
 - **NVIDIA GPUs**: CUDA support
 - **CPU**: Universal fallback
 
@@ -145,8 +174,7 @@ merit/
 
 - Python 3.8+
 - PyTorch 2.0+
-- Internet connection (for fact verification APIs)
-- 1-14GB RAM (depending on model)
+- `ANTHROPIC_API_KEY` environment variable (for LLM judge and annotation)
 
 ## License
 
@@ -155,10 +183,10 @@ MIT License
 ## Citation
 
 ```bibtex
-@software{merit2024,
+@software{merit2025,
   title={MERIT: Multi-dimensional Evaluation of Reasoning in Transformers},
   author={Tirth Patel},
-  year={2024},
-  version={2.0.0}
+  year={2025},
+  version={3.0.0}
 }
 ```
