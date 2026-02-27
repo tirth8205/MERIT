@@ -17,6 +17,12 @@ Instructions: Select ONE answer from the options above. Start your response with
 
 Show your reasoning process clearly.""",
 
+    "math_reasoning": """Solve this math problem step by step:
+
+{question}
+
+Show all your work. Give your final numerical answer after ####.""",
+
     "default": """Please answer the following question:
 
 {question}
@@ -32,7 +38,8 @@ def load_dataset(benchmark: str, sample_size: int, seed: int,
     Parameters
     ----------
     benchmark : str
-        Name of the benchmark (arc, hellaswag, truthfulqa, mmlu_logic).
+        Name of the benchmark (arc, hellaswag, truthfulqa, mmlu_logic,
+        gsm8k, bbh).
     sample_size : int
         Number of samples to draw.  If <= 0, use the full dataset.
     seed : int
@@ -58,6 +65,10 @@ def load_dataset(benchmark: str, sample_size: int, seed: int,
             ds = hf_load_dataset("truthfulqa/truthful_qa", "multiple_choice", split="validation")
         elif benchmark == "mmlu_logic":
             ds = hf_load_dataset("cais/mmlu", "formal_logic", split="test")
+        elif benchmark == "gsm8k":
+            ds = hf_load_dataset("openai/gsm8k", "main", split="test")
+        elif benchmark == "bbh":
+            ds = hf_load_dataset("lukaemon/bbh", "logical_deduction_five_objects", split="test")
         else:
             print(f"      Unknown benchmark: {benchmark}")
             return []
@@ -152,6 +163,43 @@ def load_dataset(benchmark: str, sample_size: int, seed: int,
                     "reference": item["choices"][item["answer"]],
                     "reference_letter": chr(65 + item["answer"]),
                     "task_type": "multiple_choice"
+                })
+
+            elif benchmark == "gsm8k":
+                raw_question = item["question"]
+
+                if use_instruction_format:
+                    prompt = INSTRUCTION_TEMPLATES["math_reasoning"].format(question=raw_question)
+                else:
+                    prompt = raw_question
+
+                # Extract the final numerical answer after ####
+                answer_text = item["answer"]
+                if "####" in answer_text:
+                    reference = answer_text.split("####")[-1].strip()
+                else:
+                    reference = answer_text
+
+                formatted_data.append({
+                    "prompt": prompt,
+                    "reference": reference,
+                    "reference_letter": None,
+                    "task_type": "math_reasoning"
+                })
+
+            elif benchmark == "bbh":
+                raw_question = item["input"]
+
+                if use_instruction_format:
+                    prompt = INSTRUCTION_TEMPLATES["reasoning"].format(question=raw_question)
+                else:
+                    prompt = raw_question
+
+                formatted_data.append({
+                    "prompt": prompt,
+                    "reference": item["target"],
+                    "reference_letter": None,
+                    "task_type": "reasoning"
                 })
 
         return formatted_data
