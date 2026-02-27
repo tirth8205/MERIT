@@ -1,6 +1,6 @@
 # MERIT: Multi-dimensional Evaluation of Reasoning in Transformers
 
-[![Python 3.8+](https://img.shields.io/badge/python-3.8+-blue.svg)](https://www.python.org/downloads/)
+[![Python 3.9+](https://img.shields.io/badge/python-3.9+-blue.svg)](https://www.python.org/downloads/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Version](https://img.shields.io/badge/version-3.0.0-green.svg)]()
 
@@ -9,11 +9,14 @@ A NeurIPS-oriented framework for multi-dimensional evaluation of reasoning in la
 ## Installation
 
 ```bash
-git clone https://github.com/yourusername/merit
+git clone https://github.com/tirthpatel/merit.git
 cd merit
-pip install -e ".[full]"
+pip install -e .
 
-# Required NLP model
+# Optional: LLM judge + baselines
+pip install -e ".[all]"
+
+# Required NLP model for consistency/factual metrics
 python -m spacy download en_core_web_sm
 ```
 
@@ -158,10 +161,8 @@ merit/
 │   ├── tables.py                # LaTeX table generation
 │   ├── plots.py                 # Radar charts, scaling plots
 │   └── export.py                # CSV/JSON export
-├── utils/
-│   └── stats.py                 # Bootstrap CI, Cohen's d, aggregation
-└── validation/
-    └── baseline_comparison.py   # Baseline comparison utilities
+└── utils/
+    └── stats.py                 # Bootstrap CI, Cohen's d, aggregation
 ```
 
 ## Hardware Support
@@ -172,9 +173,9 @@ merit/
 
 ## Requirements
 
-- Python 3.8+
+- Python 3.9+
 - PyTorch 2.0+
-- `ANTHROPIC_API_KEY` environment variable (for LLM judge and annotation)
+- `ANTHROPIC_API_KEY` environment variable (only needed for `--mode judge` and `annotate`)
 
 ## License
 
