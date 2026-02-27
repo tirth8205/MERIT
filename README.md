@@ -47,8 +47,8 @@ All models are instruction-tuned for reasoning tasks:
 | `qwen2-0.5b` | 0.5B | ~1GB | Quick tests, low memory |
 | `tinyllama-1b` | 1.1B | ~2GB | Good balance |
 | `phi-2` | 2.7B | ~6GB | Strong reasoning |
-| `mistral-7b-instruct` | 7B | ~14GB | Best quality |
-| `llama2-7b-chat` | 7B | ~14GB | Best quality |
+| `mistral-7b-instruct` | 7B | ~14GB | Strong quality |
+| `llama3-8b` | 8B | ~16GB | Best quality, most benchmarked |
 
 ## Supported Datasets
 

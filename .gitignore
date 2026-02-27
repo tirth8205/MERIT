@@ -1,10 +1,14 @@
 # Python virtual environment
 .venv/
+.venv312/
 venv/
 
 # Python bytecode
 __pycache__/
 *.pyc
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
 
 # IDE and editor files
 .idea/
@@ -24,11 +28,16 @@ hellaswag_results.json
 gemini_evaluation.json
 gemini_test.json
 merit_evaluation.json
+*.html
 
 # Logs and temporary files
 *.log
 *.tmp
 temp/
+
+# Coverage
+.coverage
+htmlcov/
 
 # macOS-specific files
 .DS_Store
@@ -42,6 +51,10 @@ extra/test_runs/
 # Data and evaluation outputs
 data/
 quick_eval_*/
+full_evaluation_*/
+results_*/
+evaluation_log.txt
+run_full_evaluation.py
 
 # Environment and secrets
 .env
@@ -50,6 +63,9 @@ quick_eval_*/
 
 # Jupyter notebooks checkpoints
 .ipynb_checkpoints/
+
+# Tool databases
+.code-review-graph.db
 
 # Claude Code
 .claude/

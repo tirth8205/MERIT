@@ -5,13 +5,11 @@ import pytest
 import numpy as np
 from unittest.mock import Mock, patch
 
-from merit.core.enhanced_metrics import (
-    EnhancedLogicalConsistencyMetric,
-    EnhancedFactualAccuracyMetric,
-    EnhancedReasoningStepMetric,
-    EnhancedAlignmentMetric,
-    DeviceManager
-)
+from merit.core.consistency import EnhancedLogicalConsistencyMetric
+from merit.core.factual import EnhancedFactualAccuracyMetric
+from merit.core.reasoning import EnhancedReasoningStepMetric
+from merit.core.alignment import EnhancedAlignmentMetric
+from merit.core.device import DeviceManager
 
 
 class TestDeviceManager:
@@ -44,7 +42,7 @@ class TestEnhancedLogicalConsistencyMetric:
     @pytest.fixture
     def metric(self):
         """Create metric instance for testing"""
-        with patch('merit.core.enhanced_metrics.DeviceManager.get_optimal_device', return_value="cpu"):
+        with patch('merit.core.device.DeviceManager.get_optimal_device', return_value="cpu"):
             return EnhancedLogicalConsistencyMetric()
     
     def test_consistent_text(self, metric):
@@ -83,7 +81,7 @@ class TestEnhancedLogicalConsistencyMetric:
         
         assert result["score"] == 1.0  # No contradictions possible
     
-    @patch('merit.core.enhanced_metrics.nltk.data.find')
+    @patch('merit.core.consistency.nltk.data.find')
     def test_nltk_fallback(self, mock_find, metric):
         """Test fallback when NLTK data not available"""
         mock_find.side_effect = LookupError("Resource not found")
@@ -156,7 +154,7 @@ class TestEnhancedReasoningStepMetric:
     @pytest.fixture
     def metric(self):
         """Create metric instance for testing"""
-        with patch('merit.core.enhanced_metrics.DeviceManager.get_optimal_device', return_value="cpu"):
+        with patch('merit.core.device.DeviceManager.get_optimal_device', return_value="cpu"):
             return EnhancedReasoningStepMetric()
     
     def test_clear_reasoning_steps(self, metric):
@@ -278,7 +276,7 @@ class TestMetricIntegration:
     
     def test_all_metrics_consistency(self):
         """Test that all metrics return consistent structure"""
-        with patch('merit.core.enhanced_metrics.DeviceManager.get_optimal_device', return_value="cpu"):
+        with patch('merit.core.device.DeviceManager.get_optimal_device', return_value="cpu"):
             metrics = [
                 EnhancedLogicalConsistencyMetric(),
                 EnhancedFactualAccuracyMetric(), 
@@ -331,7 +329,7 @@ class TestMetricIntegration:
             }
         ]
         
-        with patch('merit.core.enhanced_metrics.DeviceManager.get_optimal_device', return_value="cpu"):
+        with patch('merit.core.device.DeviceManager.get_optimal_device', return_value="cpu"):
             logical_metric = EnhancedLogicalConsistencyMetric()
             factual_metric = EnhancedFactualAccuracyMetric()
             reasoning_metric = EnhancedReasoningStepMetric()
@@ -356,7 +354,7 @@ class TestMetricIntegration:
 @pytest.mark.parametrize("device", ["cpu", "mps", "cuda"])
 def test_device_compatibility(device):
     """Test metrics work on different devices"""
-    with patch('merit.core.enhanced_metrics.DeviceManager.get_optimal_device', return_value=device):
+    with patch('merit.core.device.DeviceManager.get_optimal_device', return_value=device):
         try:
             metric = EnhancedLogicalConsistencyMetric()
             result = metric.compute("Test sentence for device compatibility.")
@@ -372,7 +370,7 @@ def test_device_compatibility(device):
 
 def test_metric_error_handling():
     """Test metrics handle errors gracefully"""
-    with patch('merit.core.enhanced_metrics.DeviceManager.get_optimal_device', return_value="cpu"):
+    with patch('merit.core.device.DeviceManager.get_optimal_device', return_value="cpu"):
         metric = EnhancedLogicalConsistencyMetric()
     
     # Test with problematic input

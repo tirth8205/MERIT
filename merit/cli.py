@@ -8,7 +8,7 @@ from pathlib import Path
 import json
 
 from .experiments import ExperimentRunner, ExperimentConfig
-from .models.local_models import ModelManager
+from .models.manager import ModelManager
 
 
 def main():
@@ -44,7 +44,7 @@ def create_parser():
     eval_parser = subparsers.add_parser("evaluate", help="Evaluate a model")
     eval_parser.add_argument("--model", "-m", required=True, help="Model to evaluate")
     eval_parser.add_argument("--dataset", "-d", default="arc",
-                            choices=["arc", "hellaswag", "mmlu_logic"],
+                            choices=["arc", "hellaswag", "truthfulqa", "mmlu_logic"],
                             help="Dataset (default: arc)")
     eval_parser.add_argument("--sample-size", "-s", type=int, default=50,
                             help="Sample size (0 for full dataset)")
