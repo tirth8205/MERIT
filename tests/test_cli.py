@@ -131,6 +131,7 @@ class TestEvaluateCommand:
         args.model = "gpt2"
         args.dataset = "arc"
         args.sample_size = 10
+        args.num_runs = 1
         args.mode = "heuristic"
         args.output = None
 
@@ -157,10 +158,10 @@ class TestEvaluateCommand:
         }
         mock_runner.run_full_experiment.return_value = mock_results
 
-        with patch('merit.cli.ExperimentRunner', return_value=mock_runner):
-            with patch('merit.cli.ExperimentConfig') as mock_config_cls:
-                cmd_evaluate(args)
-                mock_runner.run_full_experiment.assert_called_once()
+        with patch('merit.experiments.ExperimentRunner', return_value=mock_runner), \
+             patch('merit.experiments.ExperimentConfig'):
+            cmd_evaluate(args)
+            mock_runner.run_full_experiment.assert_called_once()
 
     def test_evaluate_command_with_output(self):
         """Test evaluate command with output file"""
@@ -168,6 +169,7 @@ class TestEvaluateCommand:
         args.model = "gpt2"
         args.dataset = "arc"
         args.sample_size = 5
+        args.num_runs = 1
         args.mode = "heuristic"
         args.output = "results.json"
 
@@ -175,8 +177,8 @@ class TestEvaluateCommand:
         mock_results = {"model_results": {"gpt2": {}}}
         mock_runner.run_full_experiment.return_value = mock_results
 
-        with patch('merit.cli.ExperimentRunner', return_value=mock_runner), \
-             patch('merit.cli.ExperimentConfig'), \
+        with patch('merit.experiments.ExperimentRunner', return_value=mock_runner), \
+             patch('merit.experiments.ExperimentConfig'), \
              patch('builtins.open', create=True) as mock_open:
             mock_file = Mock()
             mock_open.return_value.__enter__ = Mock(return_value=mock_file)
@@ -229,7 +231,7 @@ class TestModelCommands:
             }
         }
 
-        with patch('merit.cli.ModelManager', return_value=mock_manager):
+        with patch('merit.models.manager.ModelManager', return_value=mock_manager):
             cmd_list_models(args)
             mock_manager.list_available_models.assert_called_once()
 
@@ -244,7 +246,7 @@ class TestModelCommands:
         mock_adapter.generate.return_value = "AI is artificial intelligence."
         mock_manager.load_model.return_value = mock_adapter
 
-        with patch('merit.cli.ModelManager', return_value=mock_manager):
+        with patch('merit.models.manager.ModelManager', return_value=mock_manager):
             cmd_test_model(args)
 
             mock_manager.load_model.assert_called_once_with("gpt2")
