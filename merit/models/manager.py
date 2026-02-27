@@ -10,7 +10,7 @@ try:
 except ImportError:
     OLLAMA_AVAILABLE = False
 
-from .device import DeviceManager
+from .device import DeviceManager, get_memory_info
 from .huggingface import (
     LocalModelAdapter,
     Llama3Adapter,
@@ -83,7 +83,7 @@ class ModelManager:
         recommended = []
 
         if memory_constraint_gb >= 16:
-            recommended.extend(["llama3-3b", "mistral-7b-instruct"])
+            recommended.extend(["llama3-8b", "mistral-7b-instruct"])
 
         if memory_constraint_gb >= 6:
             recommended.append("phi-2")
@@ -257,8 +257,6 @@ class ModelManager:
 
         print(f"Benchmark report saved to: {output_file}")
 
-        return results
-
 
 class EnhancedModelManager(ModelManager):
     """Enhanced model manager with additional models and Ollama support"""
@@ -266,25 +264,25 @@ class EnhancedModelManager(ModelManager):
     def __init__(self, cache_dir: Optional[str] = None):
         super().__init__(cache_dir)
 
-        # Add additional models
-        self.available_models.update({
-            # Hugging Face Models
-            "codellama-7b": lambda cache_dir: CodeLlamaAdapter("7b", cache_dir),
-            "codellama-13b": lambda cache_dir: CodeLlamaAdapter("13b", cache_dir),
-            "phi3-mini": lambda cache_dir: Phi3Adapter("mini", cache_dir),
-            "phi3-small": lambda cache_dir: Phi3Adapter("small", cache_dir),
-
-            # Ollama Models (popular ones)
-            "ollama-llama2": lambda cache_dir: OllamaAdapter("llama2"),
-            "ollama-llama2-13b": lambda cache_dir: OllamaAdapter("llama2:13b"),
-            "ollama-mistral": lambda cache_dir: OllamaAdapter("mistral"),
-            "ollama-codellama": lambda cache_dir: OllamaAdapter("codellama"),
-            "ollama-phi3": lambda cache_dir: OllamaAdapter("phi3"),
-            "ollama-gemma": lambda cache_dir: OllamaAdapter("gemma"),
-            "ollama-qwen": lambda cache_dir: OllamaAdapter("qwen"),
-            "ollama-deepseek-coder": lambda cache_dir: OllamaAdapter("deepseek-coder"),
-            "ollama-wizardcoder": lambda cache_dir: OllamaAdapter("wizardcoder"),
-        })
+        # Add additional models (use _factories for multi-arg constructors)
+        self._factories = {
+            "codellama-7b": lambda cd: CodeLlamaAdapter("7b", cd),
+            "codellama-13b": lambda cd: CodeLlamaAdapter("13b", cd),
+            "phi3-mini": lambda cd: Phi3Adapter("mini", cd),
+            "phi3-small": lambda cd: Phi3Adapter("small", cd),
+            "ollama-llama2": lambda cd: OllamaAdapter("llama2"),
+            "ollama-llama2-13b": lambda cd: OllamaAdapter("llama2:13b"),
+            "ollama-mistral": lambda cd: OllamaAdapter("mistral"),
+            "ollama-codellama": lambda cd: OllamaAdapter("codellama"),
+            "ollama-phi3": lambda cd: OllamaAdapter("phi3"),
+            "ollama-gemma": lambda cd: OllamaAdapter("gemma"),
+            "ollama-qwen": lambda cd: OllamaAdapter("qwen"),
+            "ollama-deepseek-coder": lambda cd: OllamaAdapter("deepseek-coder"),
+            "ollama-wizardcoder": lambda cd: OllamaAdapter("wizardcoder"),
+        }
+        # Register all factory names as available
+        for name in self._factories:
+            self.available_models[name] = name  # placeholder; load_model is overridden
 
         # Update model info
         self.model_info.update({
@@ -382,6 +380,21 @@ class EnhancedModelManager(ModelManager):
                 "description": "WizardCoder via Ollama (quantized)"
             }
         })
+
+    def load_model(self, model_name: str) -> LocalModelAdapter:
+        """Load a model, using factory for enhanced models."""
+        if model_name in self.loaded_models:
+            return self.loaded_models[model_name]
+
+        if model_name in self._factories:
+            print(f"Loading model: {model_name}")
+            adapter = self._factories[model_name](self.cache_dir)
+            adapter.load_model()
+            self.loaded_models[model_name] = adapter
+            return adapter
+
+        # Fall back to base class for standard models
+        return super().load_model(model_name)
 
     def get_ollama_models(self) -> List[str]:
         """Get list of available Ollama models"""
