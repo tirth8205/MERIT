@@ -6,7 +6,9 @@ from .base import BaseModelAdapter
 # Lazy imports for heavy modules
 def __getattr__(name):
     _lazy_imports = {
-        "ModelManager": ".local_models",
+        "ModelManager": ".manager",
+        "EnhancedModelManager": ".manager",
+        "create_model_manager": ".manager",
     }
     if name in _lazy_imports:
         import importlib
@@ -15,4 +17,4 @@ def __getattr__(name):
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 
 
-__all__ = ["BaseModelAdapter", "ModelManager"]
+__all__ = ["BaseModelAdapter", "ModelManager", "EnhancedModelManager", "create_model_manager"]

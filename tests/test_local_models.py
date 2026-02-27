@@ -7,14 +7,10 @@ from unittest.mock import Mock, patch, MagicMock
 import tempfile
 import os
 
-from merit.models.local_models import (
-    LocalModelAdapter,
-    ModelManager,
-    DeviceManager,
-    GPT2Adapter,
-    TinyLlamaAdapter,
-    get_system_recommendations
-)
+from merit.models.device import DeviceManager, get_system_recommendations
+from merit.models.huggingface import LocalModelAdapter, TinyLlamaAdapter
+from merit.models.manager import ModelManager
+from merit.models.ollama import OllamaAdapter
 
 
 class TestDeviceManager:
@@ -42,15 +38,16 @@ class TestDeviceManager:
 
     def test_get_memory_info_cpu(self):
         """Test memory info for CPU"""
+        mock_psutil = Mock()
+        mock_vm = Mock()
+        mock_vm.total = 16 * 1024**3
+        mock_vm.available = 8 * 1024**3
+        mock_vm.percent = 50.0
+        mock_psutil.virtual_memory.return_value = mock_vm
+
         with patch('torch.backends.mps.is_available', return_value=False), \
              patch('torch.cuda.is_available', return_value=False), \
-             patch('merit.models.local_models.psutil') as mock_psutil:
-
-            mock_vm = Mock()
-            mock_vm.total = 16 * 1024**3
-            mock_vm.available = 8 * 1024**3
-            mock_vm.percent = 50.0
-            mock_psutil.virtual_memory.return_value = mock_vm
+             patch.dict('sys.modules', {'psutil': mock_psutil}):
 
             memory_info = DeviceManager.get_memory_info()
 
@@ -60,14 +57,15 @@ class TestDeviceManager:
 
     def test_get_memory_info_mps(self):
         """Test memory info for MPS"""
-        with patch('torch.backends.mps.is_available', return_value=True), \
-             patch('merit.models.local_models.psutil') as mock_psutil:
+        mock_psutil = Mock()
+        mock_vm = Mock()
+        mock_vm.total = 16 * 1024**3
+        mock_vm.available = 8 * 1024**3
+        mock_vm.percent = 50.0
+        mock_psutil.virtual_memory.return_value = mock_vm
 
-            mock_vm = Mock()
-            mock_vm.total = 16 * 1024**3
-            mock_vm.available = 8 * 1024**3
-            mock_vm.percent = 50.0
-            mock_psutil.virtual_memory.return_value = mock_vm
+        with patch('torch.backends.mps.is_available', return_value=True), \
+             patch.dict('sys.modules', {'psutil': mock_psutil}):
 
             memory_info = DeviceManager.get_memory_info()
 
@@ -92,19 +90,18 @@ class TestLocalModelAdapter:
 
     def test_adapter_initialization(self):
         """Test adapter initialization with model_name"""
-        with patch('merit.models.local_models.TRANSFORMERS_AVAILABLE', True), \
+        with patch('merit.models.huggingface.TRANSFORMERS_AVAILABLE', True), \
              patch.object(DeviceManager, 'get_optimal_device', return_value='cpu'):
 
             with tempfile.TemporaryDirectory() as cache_dir:
-                # GPT2Adapter is a concrete subclass
-                adapter = GPT2Adapter(model_size="base", cache_dir=cache_dir)
+                adapter = TinyLlamaAdapter(cache_dir=cache_dir)
 
-                assert adapter.model_name == "gpt2"
+                assert adapter.model_name == "TinyLlama/TinyLlama-1.1B-Chat-v1.0"
                 assert adapter.device == "cpu"
                 assert adapter.model is None  # Not loaded yet
 
-    @patch('merit.models.local_models.AutoTokenizer')
-    @patch('merit.models.local_models.AutoModelForCausalLM')
+    @patch('merit.models.huggingface.AutoTokenizer')
+    @patch('merit.models.huggingface.AutoModelForCausalLM')
     def test_generate_text(self, mock_model_cls, mock_tokenizer_cls):
         """Test text generation"""
         with patch.object(DeviceManager, 'get_optimal_device', return_value='cpu'):
@@ -122,7 +119,7 @@ class TestLocalModelAdapter:
             mock_model_cls.from_pretrained.return_value = mock_model
 
             with tempfile.TemporaryDirectory() as cache_dir:
-                adapter = GPT2Adapter(model_size="base", cache_dir=cache_dir)
+                adapter = TinyLlamaAdapter(cache_dir=cache_dir)
                 adapter.load_model()
 
                 result = adapter.generate(
@@ -137,17 +134,17 @@ class TestLocalModelAdapter:
     def test_get_embeddings(self):
         """Test that LocalModelAdapter is abstract (no get_embeddings by default)"""
         # LocalModelAdapter.generate is abstract
-        with patch('merit.models.local_models.TRANSFORMERS_AVAILABLE', True), \
+        with patch('merit.models.huggingface.TRANSFORMERS_AVAILABLE', True), \
              patch.object(DeviceManager, 'get_optimal_device', return_value='cpu'):
 
             with tempfile.TemporaryDirectory() as cache_dir:
-                adapter = GPT2Adapter(cache_dir=cache_dir)
+                adapter = TinyLlamaAdapter(cache_dir=cache_dir)
                 # get_embeddings not implemented - should not exist
                 assert not hasattr(adapter, 'get_embeddings') or \
                        getattr(adapter, 'get_embeddings', None) is None
 
-    @patch('merit.models.local_models.AutoTokenizer')
-    @patch('merit.models.local_models.AutoModelForCausalLM')
+    @patch('merit.models.huggingface.AutoTokenizer')
+    @patch('merit.models.huggingface.AutoModelForCausalLM')
     def test_generate_with_error_handling(self, mock_model_cls, mock_tokenizer_cls):
         """Test generation with error handling"""
         with patch.object(DeviceManager, 'get_optimal_device', return_value='cpu'):
@@ -163,7 +160,7 @@ class TestLocalModelAdapter:
             mock_model_cls.from_pretrained.return_value = mock_model
 
             with tempfile.TemporaryDirectory() as cache_dir:
-                adapter = GPT2Adapter(cache_dir=cache_dir)
+                adapter = TinyLlamaAdapter(cache_dir=cache_dir)
                 adapter.load_model()
 
                 result = adapter.generate("Test prompt")
@@ -190,7 +187,7 @@ class TestModelManager:
 
         assert isinstance(models, dict)
         # Check model keys match our available models
-        assert "gpt2-medium" in models or "tinyllama-1b" in models
+        assert "tinyllama-1b" in models
 
         # Check model info structure for any model
         if models:
@@ -199,8 +196,8 @@ class TestModelManager:
             assert "type" in first_model
             assert "memory_requirement" in first_model
 
-    @patch('merit.models.local_models.AutoTokenizer')
-    @patch('merit.models.local_models.AutoModelForCausalLM')
+    @patch('merit.models.huggingface.AutoTokenizer')
+    @patch('merit.models.huggingface.AutoModelForCausalLM')
     def test_load_model_success(self, mock_model_cls, mock_tokenizer_cls):
         """Test successful model loading"""
         with patch.object(DeviceManager, 'get_optimal_device', return_value='cpu'):
@@ -213,10 +210,10 @@ class TestModelManager:
 
             with tempfile.TemporaryDirectory() as cache_dir:
                 manager = ModelManager(cache_dir=cache_dir)
-                adapter = manager.load_model("gpt2-medium")
+                adapter = manager.load_model("tinyllama-1b")
 
                 assert adapter is not None
-                assert "gpt2-medium" in manager.loaded_models
+                assert "tinyllama-1b" in manager.loaded_models
 
     def test_load_model_invalid(self):
         """Test loading invalid model name"""
@@ -256,8 +253,8 @@ class TestModelManager:
 
         assert len(manager.loaded_models) == 0
 
-    @patch('merit.models.local_models.AutoTokenizer')
-    @patch('merit.models.local_models.AutoModelForCausalLM')
+    @patch('merit.models.huggingface.AutoTokenizer')
+    @patch('merit.models.huggingface.AutoModelForCausalLM')
     def test_benchmark_models(self, mock_model_cls, mock_tokenizer_cls):
         """Test model benchmarking"""
         with patch.object(DeviceManager, 'get_optimal_device', return_value='cpu'):
@@ -276,7 +273,7 @@ class TestModelManager:
                 manager = ModelManager(cache_dir=cache_dir)
 
                 results = manager.benchmark_models(
-                    models=["gpt2-medium"],
+                    models=["tinyllama-1b"],
                     test_prompts=["Test prompt"],
                     max_length=50,
                     temperature=0.7
@@ -284,7 +281,7 @@ class TestModelManager:
 
                 assert isinstance(results, dict)
                 assert "performance_metrics" in results
-                assert "gpt2-medium" in results["performance_metrics"]
+                assert "tinyllama-1b" in results["performance_metrics"]
 
 
 class TestSystemRecommendations:
@@ -327,8 +324,8 @@ class TestSystemRecommendations:
 class TestModelIntegration:
     """Test integration between model components"""
 
-    @patch('merit.models.local_models.AutoTokenizer')
-    @patch('merit.models.local_models.AutoModelForCausalLM')
+    @patch('merit.models.huggingface.AutoTokenizer')
+    @patch('merit.models.huggingface.AutoModelForCausalLM')
     def test_full_model_workflow(self, mock_model_cls, mock_tokenizer_cls):
         """Test complete model workflow"""
         with patch.object(DeviceManager, 'get_optimal_device', return_value='cpu'):
@@ -347,7 +344,7 @@ class TestModelIntegration:
                 manager = ModelManager(cache_dir=cache_dir)
 
                 # Load model
-                adapter = manager.load_model("gpt2-medium")
+                adapter = manager.load_model("tinyllama-1b")
                 assert adapter is not None
 
                 # Generate text
@@ -355,8 +352,8 @@ class TestModelIntegration:
                 assert isinstance(response, str)
 
                 # Unload model
-                manager.unload_model("gpt2-medium")
-                assert "gpt2-medium" not in manager.loaded_models
+                manager.unload_model("tinyllama-1b")
+                assert "tinyllama-1b" not in manager.loaded_models
 
     def test_device_compatibility_across_components(self):
         """Test device compatibility across all components"""
@@ -372,7 +369,7 @@ class TestModelIntegration:
                 assert manager is not None
 
 
-@pytest.mark.parametrize("model_name", ["gpt2-medium", "tinyllama-1b"])
+@pytest.mark.parametrize("model_name", ["tinyllama-1b", "qwen2-0.5b"])
 def test_model_availability(model_name):
     """Test that all supported models are properly configured"""
     manager = ModelManager()
