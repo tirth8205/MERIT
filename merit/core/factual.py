@@ -7,6 +7,7 @@ import spacy
 import wikipedia
 
 from merit.core.base import BaseMetric, MetricResult
+from merit.core.knowledge_cache import KnowledgeCache
 
 
 class FactualAccuracyMetric(BaseMetric):
@@ -20,9 +21,23 @@ class FactualAccuracyMetric(BaseMetric):
     def dimension(self) -> str:
         return "factuality"
 
-    def __init__(self):
-        """Initialize factual accuracy metric with web-based verification."""
+    def __init__(
+        self,
+        reproducible: bool = False,
+        cache_path: str = "data/knowledge_cache.json",
+    ):
+        """Initialize factual accuracy metric with web-based verification.
+
+        Args:
+            reproducible: If True, only cached results are used (no live API
+                calls). Cache misses return an "unknown / not_cached" result.
+            cache_path: Path to the JSON file used by :class:`KnowledgeCache`.
+        """
         self.description = "Measures factual accuracy using Wikipedia, Wikidata, and web search"
+        self.reproducible = reproducible
+
+        # File-backed knowledge cache for reproducible fact verification
+        self._knowledge_cache = KnowledgeCache(cache_path)
 
         # Initialize NLP model
         try:
@@ -31,7 +46,9 @@ class FactualAccuracyMetric(BaseMetric):
             print("Warning: spaCy model not found. Some features will be limited.")
             self.nlp = None
 
-        # Cache for lookups (avoids repeated API calls)
+        # In-memory cache for raw API responses (avoids repeated calls within
+        # a single session).  This is separate from the knowledge cache which
+        # stores *verification results* keyed by claim text.
         self.cache = {}
 
         # Request session for web calls
@@ -153,8 +170,37 @@ class FactualAccuracyMetric(BaseMetric):
 
         return claims
 
+    def save_cache(self) -> None:
+        """Persist the knowledge cache to disk.
+
+        Call this after an evaluation run so that subsequent runs in
+        ``reproducible=True`` mode can reuse the cached verification
+        results without making live API calls.
+        """
+        self._knowledge_cache.save()
+
     def _verify_claim(self, claim: Dict) -> Dict:
-        """Verify a factual claim using multiple web sources"""
+        """Verify a factual claim using multiple web sources."""
+        # Build a stable cache key from the claim's textual content
+        cache_key = claim.get("full_sentence", f"{claim['subject']}|{claim['predicate']}|{claim['object']}")
+
+        # 1. Check knowledge cache first
+        cached = self._knowledge_cache.get(cache_key)
+        if cached is not None:
+            return cached
+
+        # 2. In reproducible mode, do NOT make live API calls
+        if self.reproducible:
+            return {
+                "claim": claim,
+                "verifiable": False,
+                "verdict": "unverifiable",
+                "confidence": 0.0,
+                "sources": [],
+                "source": "not_cached",
+            }
+
+        # 3. Live verification via web APIs
         verification = {
             "claim": claim,
             "verifiable": False,
@@ -164,7 +210,7 @@ class FactualAccuracyMetric(BaseMetric):
         }
 
         # Try verification sources in order of reliability
-        # 1. Wikidata (structured, most reliable)
+        # 3a. Wikidata (structured, most reliable)
         wikidata_result = self._check_wikidata(claim)
         if wikidata_result["found"]:
             verification.update({
@@ -173,9 +219,10 @@ class FactualAccuracyMetric(BaseMetric):
                 "confidence": wikidata_result["confidence"],
                 "sources": [{"type": "wikidata", "result": wikidata_result}]
             })
+            self._knowledge_cache.put(cache_key, verification)
             return verification
 
-        # 2. Wikipedia (detailed text)
+        # 3b. Wikipedia (detailed text)
         wikipedia_result = self._check_wikipedia(claim)
         if wikipedia_result["found"]:
             verification.update({
@@ -184,9 +231,10 @@ class FactualAccuracyMetric(BaseMetric):
                 "confidence": wikipedia_result["confidence"],
                 "sources": [{"type": "wikipedia", "result": wikipedia_result}]
             })
+            self._knowledge_cache.put(cache_key, verification)
             return verification
 
-        # 3. DuckDuckGo Instant Answers (broad coverage)
+        # 3c. DuckDuckGo Instant Answers (broad coverage)
         ddg_result = self._check_duckduckgo(claim)
         if ddg_result["found"]:
             verification.update({
@@ -195,8 +243,12 @@ class FactualAccuracyMetric(BaseMetric):
                 "confidence": ddg_result["confidence"],
                 "sources": [{"type": "duckduckgo", "result": ddg_result}]
             })
+            self._knowledge_cache.put(cache_key, verification)
             return verification
 
+        # Cache the "unverifiable" result too, so reproducible mode can
+        # distinguish "looked up but not found" from "never looked up".
+        self._knowledge_cache.put(cache_key, verification)
         return verification
 
     def _check_wikidata(self, claim: Dict) -> Dict:
