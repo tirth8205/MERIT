@@ -9,10 +9,8 @@ from pathlib import Path
 from unittest.mock import Mock, patch, MagicMock
 from dataclasses import asdict
 
-from merit.experiments.robust_evaluation import (
-    ExperimentConfig,
-    ExperimentRunner
-)
+from merit.experiments.config import ExperimentConfig
+from merit.experiments.runner import ExperimentRunner
 
 
 class TestExperimentConfig:
@@ -126,6 +124,15 @@ class TestExperimentConfig:
             os.unlink(config_file)
 
 
+def _make_mock_runner(config):
+    """Create an ExperimentRunner with heavy dependencies mocked out."""
+    mock_manager_mod = MagicMock()
+    with patch.dict('sys.modules', {'merit.models.manager': mock_manager_mod}):
+        with patch.object(ExperimentRunner, '_initialize_metrics', return_value={}):
+            runner = ExperimentRunner(config)
+    return runner
+
+
 class TestExperimentRunner:
     """Test experiment runner functionality"""
 
@@ -150,35 +157,19 @@ class TestExperimentRunner:
 
     def test_runner_initialization(self, mock_config):
         """Test experiment runner initialization"""
-        with patch('merit.experiments.robust_evaluation.ModelManager'), \
-             patch('merit.experiments.robust_evaluation.BaselineComparator'), \
-             patch('merit.experiments.robust_evaluation.MetricValidator'), \
-             patch('merit.experiments.robust_evaluation.EnhancedLogicalConsistencyMetric'), \
-             patch('merit.experiments.robust_evaluation.EnhancedFactualAccuracyMetric'), \
-             patch('merit.experiments.robust_evaluation.EnhancedReasoningStepMetric'), \
-             patch('merit.experiments.robust_evaluation.EnhancedAlignmentMetric'):
+        runner = _make_mock_runner(mock_config)
 
-            runner = ExperimentRunner(mock_config)
-
-            assert runner.config == mock_config
-            assert runner.experiment_id is not None
-            assert runner.results is not None
-            assert "experiment_id" in runner.results
+        assert runner.config == mock_config
+        assert runner.experiment_id is not None
+        assert runner.results is not None
+        assert "experiment_id" in runner.results
 
     def test_runner_output_directory_creation(self, mock_config):
         """Test that runner creates output directory"""
-        with patch('merit.experiments.robust_evaluation.ModelManager'), \
-             patch('merit.experiments.robust_evaluation.BaselineComparator'), \
-             patch('merit.experiments.robust_evaluation.MetricValidator'), \
-             patch('merit.experiments.robust_evaluation.EnhancedLogicalConsistencyMetric'), \
-             patch('merit.experiments.robust_evaluation.EnhancedFactualAccuracyMetric'), \
-             patch('merit.experiments.robust_evaluation.EnhancedReasoningStepMetric'), \
-             patch('merit.experiments.robust_evaluation.EnhancedAlignmentMetric'):
+        runner = _make_mock_runner(mock_config)
 
-            runner = ExperimentRunner(mock_config)
-
-            # Output directory should be created
-            assert runner.output_dir.exists()
+        # Output directory should be created
+        assert runner.output_dir.exists()
 
 
 class TestExperimentConfigDefaults:
@@ -271,19 +262,11 @@ class TestExperimentIntegration:
                 output_dir=temp_dir
             )
 
-            with patch('merit.experiments.robust_evaluation.ModelManager'), \
-                 patch('merit.experiments.robust_evaluation.BaselineComparator'), \
-                 patch('merit.experiments.robust_evaluation.MetricValidator'), \
-                 patch('merit.experiments.robust_evaluation.EnhancedLogicalConsistencyMetric'), \
-                 patch('merit.experiments.robust_evaluation.EnhancedFactualAccuracyMetric'), \
-                 patch('merit.experiments.robust_evaluation.EnhancedReasoningStepMetric'), \
-                 patch('merit.experiments.robust_evaluation.EnhancedAlignmentMetric'):
+            runner = _make_mock_runner(config)
 
-                runner = ExperimentRunner(config)
-
-                assert runner.config.experiment_name == "integration_test"
-                assert runner.config.models == ["gpt2-medium"]
-                assert runner.config.num_runs == 1
+            assert runner.config.experiment_name == "integration_test"
+            assert runner.config.models == ["gpt2-medium"]
+            assert runner.config.num_runs == 1
 
 
 @pytest.mark.parametrize("num_runs", [1, 3, 5])
