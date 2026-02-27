@@ -29,7 +29,7 @@ except ImportError:
     BITSANDBYTES_AVAILABLE = False
     print("Info: bitsandbytes not available. 4-bit quantization disabled.")
 
-from .device import DeviceManager
+from .device import DeviceManager, get_model_config
 
 
 class LocalModelAdapter:
@@ -105,7 +105,7 @@ class Llama3Adapter(LocalModelAdapter):
                 self.tokenizer.pad_token = self.tokenizer.eos_token
 
             # Get model configuration (8B model needs more memory)
-            model_config = DeviceManager.get_model_config("7b", self.device)
+            model_config = get_model_config("7b", self.device)
 
             # Load model
             self.model = AutoModelForCausalLM.from_pretrained(
@@ -193,7 +193,7 @@ class MistralInstructAdapter(LocalModelAdapter):
             )
 
             # Load model with appropriate configuration
-            model_config = DeviceManager.get_model_config("7b", self.device)
+            model_config = get_model_config("7b", self.device)
 
             self.model = AutoModelForCausalLM.from_pretrained(
                 self.model_name,
@@ -502,7 +502,7 @@ class CodeLlamaAdapter(LocalModelAdapter):
             if self.tokenizer.pad_token is None:
                 self.tokenizer.pad_token = self.tokenizer.eos_token
 
-            model_config = DeviceManager.get_model_config(self.model_size, self.device)
+            model_config = get_model_config(self.model_size, self.device)
 
             self.model = AutoModelForCausalLM.from_pretrained(
                 self.model_name,
@@ -575,7 +575,7 @@ class Phi3Adapter(LocalModelAdapter):
                 trust_remote_code=True
             )
 
-            model_config = DeviceManager.get_model_config(
+            model_config = get_model_config(
                 "3b" if self.model_size == "mini" else "7b",
                 self.device
             )

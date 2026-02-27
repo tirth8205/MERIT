@@ -7,7 +7,7 @@ from unittest.mock import Mock, patch, MagicMock
 import tempfile
 import os
 
-from merit.models.device import DeviceManager, get_system_recommendations
+from merit.models.device import DeviceManager, get_memory_info, get_model_config
 from merit.models.huggingface import LocalModelAdapter, TinyLlamaAdapter
 from merit.models.manager import ModelManager
 from merit.models.ollama import OllamaAdapter
@@ -49,7 +49,7 @@ class TestDeviceManager:
              patch('torch.cuda.is_available', return_value=False), \
              patch.dict('sys.modules', {'psutil': mock_psutil}):
 
-            memory_info = DeviceManager.get_memory_info()
+            memory_info = get_memory_info()
 
             assert memory_info["device"] == "cpu"
             assert "available_memory_gb" in memory_info
@@ -67,22 +67,22 @@ class TestDeviceManager:
         with patch('torch.backends.mps.is_available', return_value=True), \
              patch.dict('sys.modules', {'psutil': mock_psutil}):
 
-            memory_info = DeviceManager.get_memory_info()
+            memory_info = get_memory_info()
 
             assert memory_info["device"] == "mps"
             assert memory_info["unified_memory"] is True
 
-    def test_check_memory_pressure_ok(self):
-        """Test memory pressure check when memory is OK"""
-        with patch.object(DeviceManager, 'get_memory_info') as mock_info:
-            mock_info.return_value = {"memory_used_percent": 50}
-            assert DeviceManager.check_memory_pressure() is True
+    def test_get_model_config_cpu(self):
+        """Test model config for CPU"""
+        config = get_model_config("7b", "cpu")
+        assert config["torch_dtype"] == torch.float32
+        assert config["low_cpu_mem_usage"] is True
 
-    def test_check_memory_pressure_high(self):
-        """Test memory pressure check when memory is high"""
-        with patch.object(DeviceManager, 'get_memory_info') as mock_info:
-            mock_info.return_value = {"memory_used_percent": 85}
-            assert DeviceManager.check_memory_pressure() is False
+    def test_get_model_config_cuda(self):
+        """Test model config for CUDA"""
+        config = get_model_config("7b", "cuda")
+        assert config["torch_dtype"] == torch.float16
+        assert config["device_map"] == "auto"
 
 
 class TestLocalModelAdapter:
@@ -282,43 +282,6 @@ class TestModelManager:
                 assert isinstance(results, dict)
                 assert "performance_metrics" in results
                 assert "tinyllama-1b" in results["performance_metrics"]
-
-
-class TestSystemRecommendations:
-    """Test system recommendation functionality"""
-
-    def test_get_system_recommendations_high_memory(self):
-        """Test recommendations for high-memory system"""
-        with patch.object(DeviceManager, 'get_memory_info') as mock_info:
-            mock_info.return_value = {
-                "device": "mps",
-                "unified_memory": True,
-                "total_memory_gb": 32,
-                "available_memory_gb": 24
-            }
-
-            recommendations = get_system_recommendations()
-
-            assert isinstance(recommendations, dict)
-            assert "device_info" in recommendations
-            assert "recommended_models" in recommendations
-            assert "performance_tips" in recommendations
-
-    def test_get_system_recommendations_low_memory(self):
-        """Test recommendations for low-memory system"""
-        with patch.object(DeviceManager, 'get_memory_info') as mock_info:
-            mock_info.return_value = {
-                "device": "cpu",
-                "available_memory_gb": 4,
-                "total_memory_gb": 8,
-                "memory_used_percent": 50
-            }
-
-            recommendations = get_system_recommendations()
-
-            # Should recommend smaller models for low memory
-            recommended = recommendations["recommended_models"]
-            assert "gpt2-medium" in recommended or "tinyllama-1b" in recommended
 
 
 class TestModelIntegration:
