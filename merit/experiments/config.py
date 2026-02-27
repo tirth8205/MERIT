@@ -20,6 +20,7 @@ class ExperimentConfig:
     statistical_tests: List[str] = field(default_factory=list)
     output_dir: str = "experiments"
     use_instruction_format: bool = True  # Enable instruction formatting
+    metric_mode: str = "heuristic"  # "heuristic", "llm_judge", or "both"
 
     def save(self, filepath: str):
         """Save configuration to JSON file"""

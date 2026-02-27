@@ -129,7 +129,8 @@ def _make_mock_runner(config):
     mock_manager_mod = MagicMock()
     with patch.dict('sys.modules', {'merit.models.manager': mock_manager_mod}):
         with patch.object(ExperimentRunner, '_initialize_metrics', return_value={}):
-            runner = ExperimentRunner(config)
+            with patch.object(ExperimentRunner, '_initialize_baselines', return_value={}):
+                runner = ExperimentRunner(config)
     return runner
 
 
@@ -311,6 +312,234 @@ def test_experiment_with_different_sample_sizes(sample_size):
         )
 
         assert sample_size in config.sample_sizes
+
+
+class TestMetricModeConfig:
+    """Test the metric_mode configuration field."""
+
+    def test_default_metric_mode(self):
+        """Default metric_mode should be 'heuristic'."""
+        config = ExperimentConfig(
+            experiment_name="mode_default",
+            models=["gpt2"],
+            benchmarks=["arc"],
+            sample_sizes=[5],
+        )
+        assert config.metric_mode == "heuristic"
+
+    @pytest.mark.parametrize("mode", ["heuristic", "llm_judge", "both"])
+    def test_metric_mode_values(self, mode):
+        """All three metric_mode values should be accepted."""
+        config = ExperimentConfig(
+            experiment_name="mode_test",
+            models=["gpt2"],
+            benchmarks=["arc"],
+            sample_sizes=[5],
+            metric_mode=mode,
+        )
+        assert config.metric_mode == mode
+
+    def test_metric_mode_serialization_roundtrip(self):
+        """metric_mode should survive save/load."""
+        config = ExperimentConfig(
+            experiment_name="mode_roundtrip",
+            models=["gpt2"],
+            benchmarks=["arc"],
+            sample_sizes=[5],
+            metric_mode="both",
+        )
+
+        with tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=False) as f:
+            config_file = f.name
+
+        try:
+            config.save(config_file)
+            loaded = ExperimentConfig.load(config_file)
+            assert loaded.metric_mode == "both"
+        finally:
+            os.unlink(config_file)
+
+
+class TestRunnerMetricModes:
+    """Test ExperimentRunner behavior under different metric modes."""
+
+    def test_runner_heuristic_mode_initialises_heuristic_key(self):
+        """In heuristic mode, metrics dict should contain 'heuristic' key."""
+        with tempfile.TemporaryDirectory() as temp_dir:
+            config = ExperimentConfig(
+                experiment_name="heuristic_runner",
+                models=["gpt2"],
+                benchmarks=["arc"],
+                sample_sizes=[5],
+                metric_mode="heuristic",
+                output_dir=temp_dir,
+            )
+            mock_manager_mod = MagicMock()
+            with patch.dict('sys.modules', {'merit.models.manager': mock_manager_mod}):
+                with patch.object(ExperimentRunner, '_initialize_baselines', return_value={}):
+                    runner = ExperimentRunner(config)
+
+            assert "heuristic" in runner.metrics
+            assert "llm_judge" not in runner.metrics
+
+    def test_runner_llm_judge_mode_initialises_llm_judge_key(self):
+        """In llm_judge mode, metrics dict should contain 'llm_judge' key."""
+        with tempfile.TemporaryDirectory() as temp_dir:
+            config = ExperimentConfig(
+                experiment_name="judge_runner",
+                models=["gpt2"],
+                benchmarks=["arc"],
+                sample_sizes=[5],
+                metric_mode="llm_judge",
+                output_dir=temp_dir,
+            )
+            mock_judge = MagicMock()
+            mock_manager_mod = MagicMock()
+            with patch.dict('sys.modules', {'merit.models.manager': mock_manager_mod}):
+                with patch.object(ExperimentRunner, '_initialize_baselines', return_value={}):
+                    with patch('merit.core.llm_judge.LLMJudge', return_value=mock_judge):
+                        runner = ExperimentRunner(config)
+
+            assert "llm_judge" in runner.metrics
+            assert "heuristic" not in runner.metrics
+
+    def test_runner_both_mode_has_both_keys(self):
+        """In 'both' mode, metrics dict should contain both keys."""
+        with tempfile.TemporaryDirectory() as temp_dir:
+            config = ExperimentConfig(
+                experiment_name="both_runner",
+                models=["gpt2"],
+                benchmarks=["arc"],
+                sample_sizes=[5],
+                metric_mode="both",
+                output_dir=temp_dir,
+            )
+            mock_judge = MagicMock()
+            both_metrics = {
+                "heuristic": {"logical_consistency": MagicMock()},
+                "llm_judge": mock_judge,
+            }
+            mock_manager_mod = MagicMock()
+            with patch.dict('sys.modules', {'merit.models.manager': mock_manager_mod}):
+                with patch.object(ExperimentRunner, '_initialize_baselines', return_value={}):
+                    with patch.object(ExperimentRunner, '_initialize_metrics', return_value=both_metrics):
+                        runner = ExperimentRunner(config)
+
+            assert "heuristic" in runner.metrics
+            assert "llm_judge" in runner.metrics
+
+    def test_run_evaluation_heuristic_output_structure(self):
+        """_run_evaluation in heuristic mode produces merit_heuristic and average_metrics."""
+        import numpy as np
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            config = ExperimentConfig(
+                experiment_name="eval_struct",
+                models=["gpt2"],
+                benchmarks=["arc"],
+                sample_sizes=[2],
+                metric_mode="heuristic",
+                metrics=["logical_consistency"],
+                baseline_methods=[],
+                output_dir=temp_dir,
+            )
+            runner = _make_mock_runner(config)
+
+            # Set up a mock heuristic metric
+            mock_metric = MagicMock()
+            mock_metric.compute.return_value = {"score": 0.75}
+            runner.metrics = {"heuristic": {"logical_consistency": mock_metric}}
+            runner.baselines = {}
+
+            # Fake model adapter
+            model_adapter = MagicMock()
+            model_adapter.generate.return_value = "test response"
+
+            dataset = [
+                {"prompt": "q1", "reference": "a1"},
+                {"prompt": "q2", "reference": "a2"},
+            ]
+
+            result = runner._run_evaluation(model_adapter, dataset)
+
+            assert "merit_heuristic" in result
+            assert "average_metrics" in result
+            assert result["merit_heuristic"]["logical_consistency"] == 0.75
+            assert result["average_metrics"]["logical_consistency"] == 0.75
+            assert result["total_samples"] == 2
+
+    def test_run_evaluation_baselines_output_structure(self):
+        """When baselines are configured, results should contain 'baselines' key."""
+        with tempfile.TemporaryDirectory() as temp_dir:
+            config = ExperimentConfig(
+                experiment_name="baseline_struct",
+                models=["gpt2"],
+                benchmarks=["arc"],
+                sample_sizes=[1],
+                metric_mode="heuristic",
+                metrics=["logical_consistency"],
+                baseline_methods=["bert_score"],
+                output_dir=temp_dir,
+            )
+            runner = _make_mock_runner(config)
+
+            mock_metric = MagicMock()
+            mock_metric.compute.return_value = {"score": 0.8}
+            runner.metrics = {"heuristic": {"logical_consistency": mock_metric}}
+
+            mock_bl = MagicMock()
+            mock_bl.evaluate.return_value = {"f1": 0.65, "score": 0.65}
+            runner.baselines = {"bert_score": mock_bl}
+
+            model_adapter = MagicMock()
+            model_adapter.generate.return_value = "test"
+
+            dataset = [{"prompt": "q", "reference": "a"}]
+
+            result = runner._run_evaluation(model_adapter, dataset)
+
+            assert "baselines" in result
+            assert result["baselines"]["bert_score"] == 0.65
+
+    def test_calculate_statistics_structured(self):
+        """_calculate_statistics should handle structured results."""
+        with tempfile.TemporaryDirectory() as temp_dir:
+            config = ExperimentConfig(
+                experiment_name="stats_test",
+                models=["gpt2"],
+                benchmarks=["arc"],
+                sample_sizes=[5],
+                output_dir=temp_dir,
+            )
+            runner = _make_mock_runner(config)
+
+            runs = [
+                {
+                    "merit_heuristic": {"logical_consistency": 0.8},
+                    "average_metrics": {"logical_consistency": 0.8},
+                    "baselines": {"bert_score": 0.6},
+                    "task_accuracy": 0.5,
+                    "total_samples": 5,
+                    "individual_results": [],
+                },
+                {
+                    "merit_heuristic": {"logical_consistency": 0.9},
+                    "average_metrics": {"logical_consistency": 0.9},
+                    "baselines": {"bert_score": 0.7},
+                    "task_accuracy": 0.6,
+                    "total_samples": 5,
+                    "individual_results": [],
+                },
+            ]
+
+            stats = runner._calculate_statistics(runs)
+
+            assert "merit_heuristic" in stats
+            assert "baselines" in stats
+            assert "metric_statistics" in stats
+            assert stats["merit_heuristic"]["logical_consistency"]["mean_across_runs"] == pytest.approx(0.85)
+            assert stats["baselines"]["bert_score"]["mean_across_runs"] == pytest.approx(0.65)
+            assert stats["task_accuracy"]["mean"] == pytest.approx(0.55)
 
 
 if __name__ == "__main__":

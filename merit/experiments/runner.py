@@ -25,6 +25,7 @@ class ExperimentRunner:
         from merit.models.manager import ModelManager
         self.model_manager = ModelManager()
         self.metrics = self._initialize_metrics()
+        self.baselines = self._initialize_baselines()
 
         # Results storage
         self.results = {
@@ -36,21 +37,72 @@ class ExperimentRunner:
         }
 
     def _initialize_metrics(self) -> Dict[str, Any]:
-        """Initialize metric instances"""
-        from merit.core import (
-            LogicalConsistencyMetric,
-            FactualAccuracyMetric,
-            ReasoningStepMetric,
-            AlignmentMetric,
-        )
-        metric_map = {
-            "logical_consistency": LogicalConsistencyMetric(),
-            "factual_accuracy": FactualAccuracyMetric(),
-            "reasoning_steps": ReasoningStepMetric(),
-            "alignment": AlignmentMetric()
+        """Initialize metric instances based on config.metric_mode.
+
+        Returns a dict with up to two keys:
+        - ``"heuristic"``: dict of heuristic metric instances (when mode is "heuristic" or "both")
+        - ``"llm_judge"``: an LLMJudge instance (when mode is "llm_judge" or "both")
+        """
+        mode = getattr(self.config, "metric_mode", "heuristic")
+        result: Dict[str, Any] = {}
+
+        if mode in ("heuristic", "both"):
+            from merit.core import (
+                LogicalConsistencyMetric,
+                FactualAccuracyMetric,
+                ReasoningStepMetric,
+                AlignmentMetric,
+            )
+            metric_map = {
+                "logical_consistency": LogicalConsistencyMetric(),
+                "factual_accuracy": FactualAccuracyMetric(),
+                "reasoning_steps": ReasoningStepMetric(),
+                "alignment": AlignmentMetric(),
+            }
+            result["heuristic"] = {
+                name: metric_map[name] for name in self.config.metrics if name in metric_map
+            }
+
+        if mode in ("llm_judge", "both"):
+            from merit.core.llm_judge import LLMJudge
+            result["llm_judge"] = LLMJudge()
+
+        return result
+
+    def _initialize_baselines(self) -> Dict[str, Any]:
+        """Initialize baseline evaluation methods from config.baseline_methods.
+
+        Uses lazy imports so that optional dependencies (bert-score, anthropic)
+        are only required when actually configured.
+        """
+        baselines: Dict[str, Any] = {}
+        configured = getattr(self.config, "baseline_methods", [])
+        if not configured:
+            return baselines
+
+        baseline_registry = {
+            "bert_score": "_make_bertscore",
+            "geval": "_make_geval",
         }
 
-        return {name: metric_map[name] for name in self.config.metrics if name in metric_map}
+        for name in configured:
+            factory = baseline_registry.get(name)
+            if factory:
+                try:
+                    baselines[name] = getattr(self, factory)()
+                except Exception as e:
+                    print(f"Warning: could not initialize baseline '{name}': {e}")
+        return baselines
+
+    @staticmethod
+    def _make_bertscore():
+        from merit.baselines.bertscore import BERTScoreBaseline
+        return BERTScoreBaseline()
+
+    @staticmethod
+    def _make_geval():
+        from merit.baselines.geval import GEvalBaseline
+        return GEvalBaseline()
 
     def run_full_experiment(self) -> Dict[str, Any]:
         """Run the complete experiment"""
@@ -158,9 +210,21 @@ class ExperimentRunner:
         return results
 
     def _run_evaluation(self, model_adapter, dataset: List[Dict]) -> Dict[str, Any]:
-        """Run evaluation on dataset samples"""
+        """Run evaluation on dataset samples.
+
+        The returned dict uses a structured layout:
+        - ``merit_heuristic``: per-metric averages when mode is ``"heuristic"`` or ``"both"``
+        - ``merit_llm_judge``: per-dimension averages when mode is ``"llm_judge"`` or ``"both"``
+        - ``baselines``: baseline scores when ``config.baseline_methods`` is non-empty
+        - ``average_metrics``: flat dict kept for backward compatibility (same as ``merit_heuristic``)
+        """
+        heuristic_metrics = self.metrics.get("heuristic", {})
+        llm_judge = self.metrics.get("llm_judge")
+
         individual_results = []
-        metric_scores = {metric_name: [] for metric_name in self.metrics.keys()}
+        heuristic_scores: Dict[str, List[float]] = {m: [] for m in heuristic_metrics}
+        judge_scores: Dict[str, List[float]] = {}
+        baseline_scores: Dict[str, List[float]] = {b: [] for b in self.baselines}
         correct_count = 0
 
         for idx, item in enumerate(dataset):
@@ -176,23 +240,57 @@ class ExperimentRunner:
                 print(f"        Error generating for item {idx}: {e}")
                 response = ""
 
-            # Evaluate with metrics
-            item_metrics = {}
-            for metric_name, metric in self.metrics.items():
-                try:
-                    result = metric.compute(response, item.get("reference"))
-                    score = result["score"] if isinstance(result, dict) else result
-                    item_metrics[metric_name] = score
-                    metric_scores[metric_name].append(score)
-                except Exception as e:
-                    print(f"        Error computing {metric_name}: {e}")
-                    item_metrics[metric_name] = 0.0
-                    metric_scores[metric_name].append(0.0)
+            reference = item.get("reference", "")
+            item_metrics: Dict[str, Any] = {}
 
-            # Check task accuracy - improved for multiple choice
+            # --- Heuristic metrics ---
+            if heuristic_metrics:
+                heuristic_item: Dict[str, float] = {}
+                for metric_name, metric in heuristic_metrics.items():
+                    try:
+                        result = metric.compute(response, reference)
+                        score = result["score"] if isinstance(result, dict) else result
+                        heuristic_item[metric_name] = score
+                        heuristic_scores[metric_name].append(score)
+                    except Exception as e:
+                        print(f"        Error computing {metric_name}: {e}")
+                        heuristic_item[metric_name] = 0.0
+                        heuristic_scores[metric_name].append(0.0)
+                item_metrics["merit_heuristic"] = heuristic_item
+
+            # --- LLM-judge metrics ---
+            if llm_judge is not None:
+                try:
+                    judge_results = llm_judge.evaluate_all(response, reference)
+                    judge_item = {
+                        dim: r.score for dim, r in judge_results.items()
+                    }
+                except Exception as e:
+                    print(f"        Error in LLM judge for item {idx}: {e}")
+                    judge_item = {}
+                item_metrics["merit_llm_judge"] = judge_item
+                for dim, score in judge_item.items():
+                    judge_scores.setdefault(dim, []).append(score)
+
+            # --- Baselines ---
+            if self.baselines:
+                baseline_item: Dict[str, float] = {}
+                for bl_name, bl in self.baselines.items():
+                    try:
+                        bl_result = bl.evaluate(response, reference)
+                        bl_score = bl_result.get("f1", bl_result.get("score", 0.0))
+                        baseline_item[bl_name] = bl_score
+                        baseline_scores[bl_name].append(bl_score)
+                    except Exception as e:
+                        print(f"        Error computing baseline {bl_name}: {e}")
+                        baseline_item[bl_name] = 0.0
+                        baseline_scores[bl_name].append(0.0)
+                item_metrics["baselines"] = baseline_item
+
+            # Check task accuracy
             is_correct = self._check_answer_correctness(
                 response,
-                item.get("reference", ""),
+                reference,
                 item.get("reference_letter", ""),
                 item.get("task_type", "default")
             )
@@ -202,26 +300,41 @@ class ExperimentRunner:
             individual_results.append({
                 "prompt": item["prompt"],
                 "response": response,
-                "reference": item.get("reference", ""),
+                "reference": reference,
                 "reference_letter": item.get("reference_letter", ""),
                 "metrics": item_metrics,
                 "correct": is_correct
             })
 
-        # Calculate average scores
-        avg_metrics = {
-            name: np.mean(scores) if scores else 0.0
-            for name, scores in metric_scores.items()
-        }
-
-        task_accuracy = correct_count / len(dataset) if dataset else 0.0
-
-        return {
+        # --- Build aggregated results ---
+        result: Dict[str, Any] = {
             "individual_results": individual_results,
-            "average_metrics": avg_metrics,
-            "task_accuracy": task_accuracy,
-            "total_samples": len(dataset)
+            "task_accuracy": correct_count / len(dataset) if dataset else 0.0,
+            "total_samples": len(dataset),
         }
+
+        if heuristic_metrics:
+            avg_heuristic = {
+                name: float(np.mean(scores)) if scores else 0.0
+                for name, scores in heuristic_scores.items()
+            }
+            result["merit_heuristic"] = avg_heuristic
+            # Backward-compat: keep flat average_metrics identical to merit_heuristic
+            result["average_metrics"] = avg_heuristic
+
+        if llm_judge is not None:
+            result["merit_llm_judge"] = {
+                dim: float(np.mean(scores)) if scores else 0.0
+                for dim, scores in judge_scores.items()
+            }
+
+        if self.baselines:
+            result["baselines"] = {
+                name: float(np.mean(scores)) if scores else 0.0
+                for name, scores in baseline_scores.items()
+            }
+
+        return result
 
     def _check_answer_correctness(self, response: str, reference: str, reference_letter: str, task_type: str) -> bool:
         """Check if the response contains the correct answer"""
@@ -270,36 +383,76 @@ class ExperimentRunner:
         return False
 
     def _calculate_statistics(self, runs: List[Dict]) -> Dict[str, Any]:
-        """Calculate statistics across multiple runs"""
+        """Calculate statistics across multiple runs.
+
+        Handles the structured results layout (merit_heuristic, merit_llm_judge,
+        baselines) as well as the legacy flat ``average_metrics`` key.
+        """
         if not runs:
             return {}
 
-        # Extract metric scores across runs
-        metric_names = list(runs[0]["average_metrics"].keys()) if runs else []
-
-        stats = {
+        stats: Dict[str, Any] = {
             "metric_statistics": {},
-            "task_accuracy": {}
+            "task_accuracy": {},
         }
 
-        # Calculate statistics for each metric
-        for metric_name in metric_names:
-            scores = [run["average_metrics"][metric_name] for run in runs]
+        # Helper: compute stats for a dict of scores keyed by metric name
+        def _stats_for_section(section_key: str) -> Dict[str, Any]:
+            section_stats: Dict[str, Any] = {}
+            first = runs[0].get(section_key, {})
+            if not first:
+                return section_stats
+            for name in first:
+                scores = [
+                    run[section_key][name]
+                    for run in runs
+                    if section_key in run and name in run[section_key]
+                ]
+                if scores:
+                    section_stats[name] = {
+                        "mean_across_runs": float(np.mean(scores)),
+                        "std_across_runs": float(np.std(scores)),
+                        "min_across_runs": float(np.min(scores)),
+                        "max_across_runs": float(np.max(scores)),
+                    }
+            return section_stats
 
-            stats["metric_statistics"][metric_name] = {
-                "mean_across_runs": np.mean(scores),
-                "std_across_runs": np.std(scores),
-                "min_across_runs": np.min(scores),
-                "max_across_runs": np.max(scores)
-            }
+        # Heuristic metrics (also kept in legacy metric_statistics for compat)
+        heuristic_stats = _stats_for_section("merit_heuristic")
+        if heuristic_stats:
+            stats["merit_heuristic"] = heuristic_stats
+            # Backward compatibility: also write to top-level metric_statistics
+            stats["metric_statistics"] = heuristic_stats
 
-        # Calculate task accuracy statistics
+        # LLM-judge metrics
+        judge_stats = _stats_for_section("merit_llm_judge")
+        if judge_stats:
+            stats["merit_llm_judge"] = judge_stats
+
+        # Baselines
+        baseline_stats = _stats_for_section("baselines")
+        if baseline_stats:
+            stats["baselines"] = baseline_stats
+
+        # Legacy fallback: if metric_statistics is still empty, try average_metrics
+        if not stats["metric_statistics"] and runs[0].get("average_metrics"):
+            for name in runs[0]["average_metrics"]:
+                scores = [run["average_metrics"][name] for run in runs if "average_metrics" in run]
+                if scores:
+                    stats["metric_statistics"][name] = {
+                        "mean_across_runs": float(np.mean(scores)),
+                        "std_across_runs": float(np.std(scores)),
+                        "min_across_runs": float(np.min(scores)),
+                        "max_across_runs": float(np.max(scores)),
+                    }
+
+        # Task accuracy statistics
         accuracies = [run["task_accuracy"] for run in runs]
         stats["task_accuracy"] = {
-            "mean": np.mean(accuracies),
-            "std": np.std(accuracies),
-            "min": np.min(accuracies),
-            "max": np.max(accuracies)
+            "mean": float(np.mean(accuracies)),
+            "std": float(np.std(accuracies)),
+            "min": float(np.min(accuracies)),
+            "max": float(np.max(accuracies)),
         }
 
         return stats
