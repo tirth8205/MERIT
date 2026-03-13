@@ -3,6 +3,7 @@
 Annotates model responses across all 4 MERIT dimensions using a strong LLM.
 Designed for validating heuristic metrics against LLM judgments.
 """
+
 from dataclasses import dataclass, field
 from typing import List, Dict, Optional, Any
 import json
@@ -14,6 +15,7 @@ import time
 @dataclass
 class AnnotationConfig:
     """Configuration for the annotation pipeline."""
+
     provider: str = "anthropic"
     model: str = "claude-sonnet-4-20250514"
     temperature: float = 0.0
@@ -53,10 +55,13 @@ class AnnotationPipeline:
     def _get_client(self):
         if self._client is None and self.config.provider == "anthropic":
             import anthropic
+
             self._client = anthropic.Anthropic()
         return self._client
 
-    def _call_annotator(self, response: str, reference: str = "", context: str = "") -> Dict[str, Any]:
+    def _call_annotator(
+        self, response: str, reference: str = "", context: str = ""
+    ) -> Dict[str, Any]:
         """Call the annotation model and parse structured response."""
         prompt = ANNOTATION_PROMPT.format(
             response=response,
@@ -75,6 +80,7 @@ class AnnotationPipeline:
             text = msg.content[0].text
         elif self.config.provider == "ollama":
             import requests
+
             resp = requests.post(
                 "http://localhost:11434/api/generate",
                 json={"model": self.config.model, "prompt": prompt, "stream": False},
@@ -84,7 +90,7 @@ class AnnotationPipeline:
             raise ValueError(f"Unknown provider: {self.config.provider}")
 
         # Parse JSON from response
-        match = re.search(r'\{.*\}', text, re.DOTALL)
+        match = re.search(r"\{.*\}", text, re.DOTALL)
         if match:
             try:
                 parsed = json.loads(match.group())
@@ -97,8 +103,12 @@ class AnnotationPipeline:
                 pass
 
         return {
-            "consistency": 3, "factual": 3, "reasoning": 3, "alignment": 3,
-            "explanations": {}, "parse_error": True,
+            "consistency": 3,
+            "factual": 3,
+            "reasoning": 3,
+            "alignment": 3,
+            "explanations": {},
+            "parse_error": True,
         }
 
     def annotate(self, response: str, reference: str = "", context: str = "") -> Dict[str, Any]:

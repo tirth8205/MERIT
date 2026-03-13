@@ -1,4 +1,5 @@
 """Dataset loading and instruction templates for MERIT experiments."""
+
 import random
 from typing import List, Dict
 
@@ -10,29 +11,27 @@ INSTRUCTION_TEMPLATES = {
 Question: {question}
 
 Instructions: Select ONE answer from the options above. Start your response with the letter of your choice (A, B, C, or D), then briefly explain why.""",
-
     "reasoning": """Please solve the following problem step by step:
 
 {question}
 
 Show your reasoning process clearly.""",
-
     "math_reasoning": """Solve this math problem step by step:
 
 {question}
 
 Show all your work. Give your final numerical answer after ####.""",
-
     "default": """Please answer the following question:
 
 {question}
 
-Provide a clear and concise answer."""
+Provide a clear and concise answer.""",
 }
 
 
-def load_dataset(benchmark: str, sample_size: int, seed: int,
-                 use_instruction_format: bool = True) -> List[Dict]:
+def load_dataset(
+    benchmark: str, sample_size: int, seed: int, use_instruction_format: bool = True
+) -> List[Dict]:
     """Load and sample dataset.
 
     Parameters
@@ -91,7 +90,9 @@ def load_dataset(benchmark: str, sample_size: int, seed: int,
         formatted_data = []
         for item in sampled_data:
             if benchmark == "arc":
-                choices_text = "\n".join([f"({chr(65+i)}) {choice}" for i, choice in enumerate(item["choices"]["text"])])
+                choices_text = "\n".join(
+                    [f"({chr(65+i)}) {choice}" for i, choice in enumerate(item["choices"]["text"])]
+                )
                 answer_key = item["answerKey"]
                 answer_idx = item["choices"]["label"].index(answer_key)
                 reference_text = item["choices"]["text"][answer_idx]
@@ -105,16 +106,20 @@ def load_dataset(benchmark: str, sample_size: int, seed: int,
                 else:
                     prompt = raw_question
 
-                formatted_data.append({
-                    "prompt": prompt,
-                    "reference": reference_text,
-                    "reference_letter": answer_key,
-                    "task_type": "multiple_choice"
-                })
+                formatted_data.append(
+                    {
+                        "prompt": prompt,
+                        "reference": reference_text,
+                        "reference_letter": answer_key,
+                        "task_type": "multiple_choice",
+                    }
+                )
 
             elif benchmark == "hellaswag":
                 context = f"{item['ctx']}\n{item['activity_label']}"
-                endings = "\n".join([f"({chr(65+i)}) {ending}" for i, ending in enumerate(item["endings"])])
+                endings = "\n".join(
+                    [f"({chr(65+i)}) {ending}" for i, ending in enumerate(item["endings"])]
+                )
                 raw_question = f"{context}\n\nChoose the best continuation:\n{endings}"
 
                 if use_instruction_format:
@@ -122,19 +127,23 @@ def load_dataset(benchmark: str, sample_size: int, seed: int,
                 else:
                     prompt = raw_question
 
-                formatted_data.append({
-                    "prompt": prompt,
-                    "reference": item["endings"][int(item["label"])],
-                    "reference_letter": chr(65 + int(item["label"])),
-                    "task_type": "multiple_choice"
-                })
+                formatted_data.append(
+                    {
+                        "prompt": prompt,
+                        "reference": item["endings"][int(item["label"])],
+                        "reference_letter": chr(65 + int(item["label"])),
+                        "task_type": "multiple_choice",
+                    }
+                )
 
             elif benchmark == "truthfulqa":
                 choices = item["mc1_targets"]["choices"]
                 labels = item["mc1_targets"]["labels"]
                 correct_idx = labels.index(1)  # Find the correct answer index
 
-                choices_text = "\n".join([f"({chr(65+i)}) {choice}" for i, choice in enumerate(choices)])
+                choices_text = "\n".join(
+                    [f"({chr(65+i)}) {choice}" for i, choice in enumerate(choices)]
+                )
                 raw_question = f"{item['question']}\n\nOptions:\n{choices_text}"
 
                 if use_instruction_format:
@@ -142,15 +151,19 @@ def load_dataset(benchmark: str, sample_size: int, seed: int,
                 else:
                     prompt = raw_question
 
-                formatted_data.append({
-                    "prompt": prompt,
-                    "reference": choices[correct_idx],
-                    "reference_letter": chr(65 + correct_idx),
-                    "task_type": "multiple_choice"
-                })
+                formatted_data.append(
+                    {
+                        "prompt": prompt,
+                        "reference": choices[correct_idx],
+                        "reference_letter": chr(65 + correct_idx),
+                        "task_type": "multiple_choice",
+                    }
+                )
 
             elif benchmark == "mmlu_logic":
-                choices_text = "\n".join([f"({chr(65+i)}) {choice}" for i, choice in enumerate(item["choices"])])
+                choices_text = "\n".join(
+                    [f"({chr(65+i)}) {choice}" for i, choice in enumerate(item["choices"])]
+                )
                 raw_question = f"{item['question']}\n\nOptions:\n{choices_text}"
 
                 if use_instruction_format:
@@ -158,12 +171,14 @@ def load_dataset(benchmark: str, sample_size: int, seed: int,
                 else:
                     prompt = raw_question
 
-                formatted_data.append({
-                    "prompt": prompt,
-                    "reference": item["choices"][item["answer"]],
-                    "reference_letter": chr(65 + item["answer"]),
-                    "task_type": "multiple_choice"
-                })
+                formatted_data.append(
+                    {
+                        "prompt": prompt,
+                        "reference": item["choices"][item["answer"]],
+                        "reference_letter": chr(65 + item["answer"]),
+                        "task_type": "multiple_choice",
+                    }
+                )
 
             elif benchmark == "gsm8k":
                 raw_question = item["question"]
@@ -180,12 +195,14 @@ def load_dataset(benchmark: str, sample_size: int, seed: int,
                 else:
                     reference = answer_text
 
-                formatted_data.append({
-                    "prompt": prompt,
-                    "reference": reference,
-                    "reference_letter": None,
-                    "task_type": "math_reasoning"
-                })
+                formatted_data.append(
+                    {
+                        "prompt": prompt,
+                        "reference": reference,
+                        "reference_letter": None,
+                        "task_type": "math_reasoning",
+                    }
+                )
 
             elif benchmark == "bbh":
                 raw_question = item["input"]
@@ -195,17 +212,20 @@ def load_dataset(benchmark: str, sample_size: int, seed: int,
                 else:
                     prompt = raw_question
 
-                formatted_data.append({
-                    "prompt": prompt,
-                    "reference": item["target"],
-                    "reference_letter": None,
-                    "task_type": "reasoning"
-                })
+                formatted_data.append(
+                    {
+                        "prompt": prompt,
+                        "reference": item["target"],
+                        "reference_letter": None,
+                        "task_type": "reasoning",
+                    }
+                )
 
         return formatted_data
 
     except Exception as e:
         print(f"      Error loading dataset: {e}")
         import traceback
+
         traceback.print_exc()
         return []

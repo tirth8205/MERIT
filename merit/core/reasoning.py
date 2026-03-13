@@ -1,4 +1,5 @@
 """Reasoning step metric for MERIT."""
+
 import re
 from typing import Dict, List, Optional
 
@@ -39,17 +40,54 @@ class ReasoningStepMetric(BaseMetric):
 
         # Reasoning markers for different types of reasoning
         self.reasoning_markers = {
-            "causal": ["because", "since", "due to", "owing to", "as a result", "therefore", "thus", "hence", "consequently"],
-            "sequential": ["first", "second", "third", "next", "then", "finally", "lastly", "initially", "subsequently"],
+            "causal": [
+                "because",
+                "since",
+                "due to",
+                "owing to",
+                "as a result",
+                "therefore",
+                "thus",
+                "hence",
+                "consequently",
+            ],
+            "sequential": [
+                "first",
+                "second",
+                "third",
+                "next",
+                "then",
+                "finally",
+                "lastly",
+                "initially",
+                "subsequently",
+            ],
             "conditional": ["if", "unless", "provided that", "assuming", "given that", "in case"],
-            "contrastive": ["however", "nevertheless", "on the other hand", "in contrast", "but", "yet", "although"],
-            "evidential": ["for example", "for instance", "such as", "namely", "specifically", "in particular"]
+            "contrastive": [
+                "however",
+                "nevertheless",
+                "on the other hand",
+                "in contrast",
+                "but",
+                "yet",
+                "although",
+            ],
+            "evidential": [
+                "for example",
+                "for instance",
+                "such as",
+                "namely",
+                "specifically",
+                "in particular",
+            ],
         }
 
     def compute(self, response: str, reference: Optional[str] = None, **kwargs) -> MetricResult:
         """Compute enhanced reasoning step quality."""
         if not response.strip():
-            return MetricResult(score=0.0, dimension=self.dimension, details={"analysis": "Empty prediction"})
+            return MetricResult(
+                score=0.0, dimension=self.dimension, details={"analysis": "Empty prediction"}
+            )
 
         # Extract reasoning steps using multiple methods
         steps = self._extract_reasoning_steps(response)
@@ -58,10 +96,7 @@ class ReasoningStepMetric(BaseMetric):
             return MetricResult(
                 score=0.2,
                 dimension=self.dimension,
-                details={
-                    "analysis": "No clear reasoning steps found",
-                    "steps": []
-                }
+                details={"analysis": "No clear reasoning steps found", "steps": []},
             )
 
         # Analyze step quality
@@ -74,7 +109,9 @@ class ReasoningStepMetric(BaseMetric):
         completeness_analysis = self._analyze_completeness(steps, response)
 
         # Calculate overall score
-        overall_score = self._calculate_overall_score(step_analysis, coherence_analysis, completeness_analysis)
+        overall_score = self._calculate_overall_score(
+            step_analysis, coherence_analysis, completeness_analysis
+        )
 
         details = {
             "steps": steps,
@@ -85,8 +122,8 @@ class ReasoningStepMetric(BaseMetric):
             "detailed_scores": {
                 "step_quality_score": step_analysis.get("average_quality", 0),
                 "coherence_score": coherence_analysis.get("overall_coherence", 0),
-                "completeness_score": completeness_analysis.get("completeness_score", 0)
-            }
+                "completeness_score": completeness_analysis.get("completeness_score", 0),
+            },
         }
 
         return MetricResult(score=overall_score, dimension=self.dimension, details=details)
@@ -116,16 +153,16 @@ class ReasoningStepMetric(BaseMetric):
     def _extract_pattern_based_steps(self, text: str) -> List[Dict]:
         """Extract steps using improved pattern matching"""
         steps = []
-        lines = text.split('\n')
+        lines = text.split("\n")
 
         # Enhanced patterns for step detection
         patterns = [
-            r'^\s*(\d+)[.)]\s*(.*)',  # 1. Step
-            r'^\s*Step\s+(\d+)[:.]\s*(.*)',  # Step 1:
-            r'^\s*[•*-]\s*(.*)',  # bullet Step
-            r'^\s*(First|Second|Third|Fourth|Fifth|Finally|Lastly),\s*(.*)',  # First, Second, etc.
-            r'^\s*(Initially|Subsequently|Then|Next|After that),\s*(.*)',  # Sequential markers
-            r'^\s*(Therefore|Thus|Hence|Consequently),\s*(.*)',  # Logical connectors
+            r"^\s*(\d+)[.)]\s*(.*)",  # 1. Step
+            r"^\s*Step\s+(\d+)[:.]\s*(.*)",  # Step 1:
+            r"^\s*[•*-]\s*(.*)",  # bullet Step
+            r"^\s*(First|Second|Third|Fourth|Fifth|Finally|Lastly),\s*(.*)",  # First, Second, etc.
+            r"^\s*(Initially|Subsequently|Then|Next|After that),\s*(.*)",  # Sequential markers
+            r"^\s*(Therefore|Thus|Hence|Consequently),\s*(.*)",  # Logical connectors
         ]
 
         for line in lines:
@@ -144,13 +181,22 @@ class ReasoningStepMetric(BaseMetric):
                         step_text = match.group(1)
                         step_num = len(steps) + 1
 
-                    steps.append({
-                        "number": step_num,
-                        "text": step_text,
-                        "type": "pattern_based",
-                        "pattern_type": ["numbered", "explicit", "bulleted", "sequential", "temporal", "logical"][i],
-                        "original_line": line
-                    })
+                    steps.append(
+                        {
+                            "number": step_num,
+                            "text": step_text,
+                            "type": "pattern_based",
+                            "pattern_type": [
+                                "numbered",
+                                "explicit",
+                                "bulleted",
+                                "sequential",
+                                "temporal",
+                                "logical",
+                            ][i],
+                            "original_line": line,
+                        }
+                    )
                     break
 
         return steps
@@ -169,18 +215,26 @@ class ReasoningStepMetric(BaseMetric):
 
             if reasoning_type:
                 # Analyze the sentence structure
-                root = [token for token in sent if token.dep_ == "ROOT"][0] if any(token.dep_ == "ROOT" for token in sent) else None
+                root = (
+                    [token for token in sent if token.dep_ == "ROOT"][0]
+                    if any(token.dep_ == "ROOT" for token in sent)
+                    else None
+                )
 
                 if root:
-                    steps.append({
-                        "number": i + 1,
-                        "text": sent.text,
-                        "type": "nlp_based",
-                        "reasoning_type": reasoning_type,
-                        "root_verb": root.text,
-                        "root_pos": root.pos_,
-                        "dependencies": [(token.text, token.dep_, token.head.text) for token in sent]
-                    })
+                    steps.append(
+                        {
+                            "number": i + 1,
+                            "text": sent.text,
+                            "type": "nlp_based",
+                            "reasoning_type": reasoning_type,
+                            "root_verb": root.text,
+                            "root_pos": root.pos_,
+                            "dependencies": [
+                                (token.text, token.dep_, token.head.text) for token in sent
+                            ],
+                        }
+                    )
 
         return steps
 
@@ -193,7 +247,7 @@ class ReasoningStepMetric(BaseMetric):
             doc = self.nlp(text)
             sentences = [sent.text for sent in doc.sents]
         else:
-            sentences = re.split(r'[.!?]+', text)
+            sentences = re.split(r"[.!?]+", text)
             sentences = [s.strip() for s in sentences if s.strip()]
 
         for i, sentence in enumerate(sentences):
@@ -201,13 +255,15 @@ class ReasoningStepMetric(BaseMetric):
             reasoning_score = self._score_reasoning_characteristics(sentence)
 
             if reasoning_score > 0.3:  # Threshold for considering it a reasoning step
-                steps.append({
-                    "number": i + 1,
-                    "text": sentence,
-                    "type": "sentence_based",
-                    "reasoning_score": reasoning_score,
-                    "characteristics": self._analyze_sentence_characteristics(sentence)
-                })
+                steps.append(
+                    {
+                        "number": i + 1,
+                        "text": sentence,
+                        "type": "sentence_based",
+                        "reasoning_score": reasoning_score,
+                        "characteristics": self._analyze_sentence_characteristics(sentence),
+                    }
+                )
 
         return steps
 
@@ -234,10 +290,10 @@ class ReasoningStepMetric(BaseMetric):
 
         # Check for logical structures
         logical_patterns = [
-            r'if\s+.+\s+then',
-            r'given\s+.+\s+we\s+can',
-            r'since\s+.+\s+therefore',
-            r'because\s+.+\s+thus'
+            r"if\s+.+\s+then",
+            r"given\s+.+\s+we\s+can",
+            r"since\s+.+\s+therefore",
+            r"because\s+.+\s+thus",
         ]
 
         for pattern in logical_patterns:
@@ -246,12 +302,25 @@ class ReasoningStepMetric(BaseMetric):
                 break
 
         # Check for analytical language
-        analytical_words = ["analyze", "conclude", "infer", "deduce", "assume", "hypothesis", "evidence", "supports", "indicates"]
+        analytical_words = [
+            "analyze",
+            "conclude",
+            "infer",
+            "deduce",
+            "assume",
+            "hypothesis",
+            "evidence",
+            "supports",
+            "indicates",
+        ]
         if any(word in sentence_lower for word in analytical_words):
             score += 0.2
 
         # Check for quantitative reasoning
-        if re.search(r'\d+', sentence) and any(word in sentence_lower for word in ["percent", "ratio", "proportion", "increase", "decrease"]):
+        if re.search(r"\d+", sentence) and any(
+            word in sentence_lower
+            for word in ["percent", "ratio", "proportion", "increase", "decrease"]
+        ):
             score += 0.2
 
         return min(1.0, score)
@@ -263,7 +332,7 @@ class ReasoningStepMetric(BaseMetric):
             "reasoning_types": [],
             "has_logical_structure": False,
             "has_quantitative_elements": False,
-            "complexity_score": 0
+            "complexity_score": 0,
         }
 
         sentence_lower = sentence.lower()
@@ -275,11 +344,13 @@ class ReasoningStepMetric(BaseMetric):
                 characteristics["reasoning_types"].append(reasoning_type)
 
         # Check logical structure
-        logical_patterns = [r'if\s+.+\s+then', r'either\s+.+\s+or', r'not\s+only\s+.+\s+but\s+also']
-        characteristics["has_logical_structure"] = any(re.search(pattern, sentence_lower) for pattern in logical_patterns)
+        logical_patterns = [r"if\s+.+\s+then", r"either\s+.+\s+or", r"not\s+only\s+.+\s+but\s+also"]
+        characteristics["has_logical_structure"] = any(
+            re.search(pattern, sentence_lower) for pattern in logical_patterns
+        )
 
         # Check quantitative elements
-        characteristics["has_quantitative_elements"] = bool(re.search(r'\d+', sentence))
+        characteristics["has_quantitative_elements"] = bool(re.search(r"\d+", sentence))
 
         # Calculate complexity (based on sentence length and structure)
         characteristics["complexity_score"] = min(1.0, len(sentence.split()) / 20.0)
@@ -298,7 +369,7 @@ class ReasoningStepMetric(BaseMetric):
         # Find duplicates using similarity threshold
         to_remove = set()
         for i, emb1 in enumerate(embeddings):
-            for j, emb2 in enumerate(embeddings[i+1:], i+1):
+            for j, emb2 in enumerate(embeddings[i + 1 :], i + 1):
                 similarity = cosine_similarity([emb1], [emb2])[0][0]
                 if similarity > 0.9:  # Very similar
                     # Keep the more detailed one
@@ -334,7 +405,10 @@ class ReasoningStepMetric(BaseMetric):
                 quality_score += 0.3
 
             # Specificity (presence of concrete details)
-            if re.search(r'\d+', step["text"]) or any(word in step["text"].lower() for word in ["specific", "example", "such as", "namely"]):
+            if re.search(r"\d+", step["text"]) or any(
+                word in step["text"].lower()
+                for word in ["specific", "example", "such as", "namely"]
+            ):
                 quality_score += 0.2
 
             # Logical structure
@@ -350,8 +424,8 @@ class ReasoningStepMetric(BaseMetric):
             "quality_distribution": {
                 "high_quality": sum(1 for score in step_scores if score >= 0.7),
                 "medium_quality": sum(1 for score in step_scores if 0.4 <= score < 0.7),
-                "low_quality": sum(1 for score in step_scores if score < 0.4)
-            }
+                "low_quality": sum(1 for score in step_scores if score < 0.4),
+            },
         }
 
     def _analyze_step_coherence(self, steps: List[Dict]) -> Dict:
@@ -376,7 +450,16 @@ class ReasoningStepMetric(BaseMetric):
             next_step = steps[i + 1]["text"].lower()
 
             # Check if next step has logical connectors referring to current step
-            connectors = ["therefore", "thus", "hence", "so", "consequently", "as a result", "this means", "this shows"]
+            connectors = [
+                "therefore",
+                "thus",
+                "hence",
+                "so",
+                "consequently",
+                "as a result",
+                "this means",
+                "this shows",
+            ]
             has_connector = any(conn in next_step for conn in connectors)
             connector_scores.append(1.0 if has_connector else 0.5)
 
@@ -386,7 +469,9 @@ class ReasoningStepMetric(BaseMetric):
             combined = (coherences[i] * 0.7) + (connector_scores[i] * 0.3)
             combined_coherences.append(combined)
 
-        overall_coherence = sum(combined_coherences) / len(combined_coherences) if combined_coherences else 0
+        overall_coherence = (
+            sum(combined_coherences) / len(combined_coherences) if combined_coherences else 0
+        )
 
         return {
             "overall_coherence": overall_coherence,
@@ -396,8 +481,8 @@ class ReasoningStepMetric(BaseMetric):
             "coherence_statistics": {
                 "mean": overall_coherence,
                 "min": min(combined_coherences) if combined_coherences else 0,
-                "max": max(combined_coherences) if combined_coherences else 0
-            }
+                "max": max(combined_coherences) if combined_coherences else 0,
+            },
         }
 
     def _analyze_completeness(self, steps: List[Dict], full_text: str) -> Dict:
@@ -406,11 +491,15 @@ class ReasoningStepMetric(BaseMetric):
         step_text = " ".join([step["text"] for step in steps])
 
         # Remove step markers from full text for fair comparison
-        cleaned_full_text = re.sub(r'\d+[.)]|\s*[•*-]\s*|Step\s+\d+[:.]\s*|First,\s*|Second,\s*|Third,\s*|Finally,\s*', '', full_text)
+        cleaned_full_text = re.sub(
+            r"\d+[.)]|\s*[•*-]\s*|Step\s+\d+[:.]\s*|First,\s*|Second,\s*|Third,\s*|Finally,\s*",
+            "",
+            full_text,
+        )
 
         # Calculate word coverage
-        full_words = set(re.findall(r'\b\w+\b', cleaned_full_text.lower()))
-        step_words = set(re.findall(r'\b\w+\b', step_text.lower()))
+        full_words = set(re.findall(r"\b\w+\b", cleaned_full_text.lower()))
+        step_words = set(re.findall(r"\b\w+\b", step_text.lower()))
 
         if not full_words:
             word_coverage = 0.0
@@ -418,7 +507,7 @@ class ReasoningStepMetric(BaseMetric):
             word_coverage = len(step_words.intersection(full_words)) / len(full_words)
 
         # Estimate expected number of steps based on text complexity
-        sentences = re.split(r'[.!?]+', cleaned_full_text)
+        sentences = re.split(r"[.!?]+", cleaned_full_text)
         sentences = [s.strip() for s in sentences if s.strip()]
 
         # Heuristic: expect one reasoning step per 2-3 sentences for complex reasoning
@@ -438,10 +527,12 @@ class ReasoningStepMetric(BaseMetric):
             "actual_steps": len(steps),
             "expected_steps": expected_steps,
             "step_ratio": step_ratio,
-            "total_sentences": len(sentences)
+            "total_sentences": len(sentences),
         }
 
-    def _calculate_overall_score(self, step_analysis: Dict, coherence_analysis: Dict, completeness_analysis: Dict) -> float:
+    def _calculate_overall_score(
+        self, step_analysis: Dict, coherence_analysis: Dict, completeness_analysis: Dict
+    ) -> float:
         """Calculate overall reasoning step score"""
         quality_score = step_analysis.get("average_quality", 0)
         coherence_score = coherence_analysis.get("overall_coherence", 0)

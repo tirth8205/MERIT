@@ -1,15 +1,12 @@
 """HuggingFace model adapters for MERIT."""
+
 import torch
 from typing import Optional
 import gc
 
 try:
-    from transformers import (
-        AutoModelForCausalLM,
-        AutoTokenizer,
-        BitsAndBytesConfig,
-        pipeline
-    )
+    from transformers import AutoModelForCausalLM, AutoTokenizer, BitsAndBytesConfig, pipeline
+
     TRANSFORMERS_AVAILABLE = True
 except ImportError:
     TRANSFORMERS_AVAILABLE = False
@@ -17,6 +14,7 @@ except ImportError:
 
 try:
     import accelerate
+
     ACCELERATE_AVAILABLE = True
 except ImportError:
     ACCELERATE_AVAILABLE = False
@@ -24,6 +22,7 @@ except ImportError:
 
 try:
     import bitsandbytes
+
     BITSANDBYTES_AVAILABLE = True
 except ImportError:
     BITSANDBYTES_AVAILABLE = False
@@ -50,7 +49,9 @@ class LocalModelAdapter:
         """Load the model and tokenizer"""
         raise NotImplementedError("Subclasses must implement load_model")
 
-    def generate(self, prompt: str, max_length: int = 1000, temperature: float = 0.7, **kwargs) -> str:
+    def generate(
+        self, prompt: str, max_length: int = 1000, temperature: float = 0.7, **kwargs
+    ) -> str:
         """Generate text from prompt"""
         raise NotImplementedError("Subclasses must implement generate")
 
@@ -83,10 +84,7 @@ class Llama3Adapter(LocalModelAdapter):
     """Adapter for Llama-3.1-8B-Instruct model (best for academic benchmarking)"""
 
     def __init__(self, cache_dir: Optional[str] = None):
-        super().__init__(
-            model_name="meta-llama/Llama-3.1-8B-Instruct",
-            cache_dir=cache_dir
-        )
+        super().__init__(model_name="meta-llama/Llama-3.1-8B-Instruct", cache_dir=cache_dir)
 
     def load_model(self):
         """Load Llama-3.1-8B-Instruct model"""
@@ -95,9 +93,7 @@ class Llama3Adapter(LocalModelAdapter):
         try:
             # Load tokenizer
             self.tokenizer = AutoTokenizer.from_pretrained(
-                self.model_name,
-                cache_dir=self.cache_dir,
-                trust_remote_code=True
+                self.model_name, cache_dir=self.cache_dir, trust_remote_code=True
             )
 
             # Set pad token
@@ -109,9 +105,7 @@ class Llama3Adapter(LocalModelAdapter):
 
             # Load model
             self.model = AutoModelForCausalLM.from_pretrained(
-                self.model_name,
-                cache_dir=self.cache_dir,
-                **model_config
+                self.model_name, cache_dir=self.cache_dir, **model_config
             )
 
             print(f"\u2713 {self.model_name} loaded successfully")
@@ -120,7 +114,9 @@ class Llama3Adapter(LocalModelAdapter):
             print(f"\u2717 Error loading {self.model_name}: {e}")
             raise
 
-    def generate(self, prompt: str, max_length: int = 1000, temperature: float = 0.7, **kwargs) -> str:
+    def generate(
+        self, prompt: str, max_length: int = 1000, temperature: float = 0.7, **kwargs
+    ) -> str:
         """Generate response using Llama-3 chat format"""
         if self.model is None or self.tokenizer is None:
             self.load_model()
@@ -134,10 +130,7 @@ class Llama3Adapter(LocalModelAdapter):
 
             # Encode input
             inputs = self.tokenizer(
-                formatted_prompt,
-                return_tensors="pt",
-                max_length=2048,
-                truncation=True
+                formatted_prompt, return_tensors="pt", max_length=2048, truncation=True
             )
 
             # Move to device
@@ -153,7 +146,7 @@ class Llama3Adapter(LocalModelAdapter):
                     do_sample=temperature > 0,
                     pad_token_id=self.tokenizer.eos_token_id,
                     repetition_penalty=1.1,
-                    **kwargs
+                    **kwargs,
                 )
 
             # Decode response
@@ -163,7 +156,7 @@ class Llama3Adapter(LocalModelAdapter):
             if "assistant" in generated_text.lower():
                 response = generated_text.split("assistant")[-1].strip()
             else:
-                response = generated_text[len(formatted_prompt):].strip()
+                response = generated_text[len(formatted_prompt) :].strip()
 
             return response
 
@@ -176,10 +169,7 @@ class MistralInstructAdapter(LocalModelAdapter):
     """Adapter for Mistral-7B-Instruct model"""
 
     def __init__(self, cache_dir: Optional[str] = None):
-        super().__init__(
-            model_name="mistralai/Mistral-7B-Instruct-v0.1",
-            cache_dir=cache_dir
-        )
+        super().__init__(model_name="mistralai/Mistral-7B-Instruct-v0.1", cache_dir=cache_dir)
 
     def load_model(self):
         """Load Mistral-7B-Instruct model"""
@@ -188,17 +178,14 @@ class MistralInstructAdapter(LocalModelAdapter):
         try:
             # Load tokenizer
             self.tokenizer = AutoTokenizer.from_pretrained(
-                self.model_name,
-                cache_dir=self.cache_dir
+                self.model_name, cache_dir=self.cache_dir
             )
 
             # Load model with appropriate configuration
             model_config = get_model_config("7b", self.device)
 
             self.model = AutoModelForCausalLM.from_pretrained(
-                self.model_name,
-                cache_dir=self.cache_dir,
-                **model_config
+                self.model_name, cache_dir=self.cache_dir, **model_config
             )
 
             print(f"\u2713 {self.model_name} loaded successfully")
@@ -207,7 +194,9 @@ class MistralInstructAdapter(LocalModelAdapter):
             print(f"\u2717 Error loading {self.model_name}: {e}")
             raise
 
-    def generate(self, prompt: str, max_length: int = 1000, temperature: float = 0.7, **kwargs) -> str:
+    def generate(
+        self, prompt: str, max_length: int = 1000, temperature: float = 0.7, **kwargs
+    ) -> str:
         """Generate response using Mistral instruct format"""
         if self.model is None or self.tokenizer is None:
             self.load_model()
@@ -228,12 +217,12 @@ class MistralInstructAdapter(LocalModelAdapter):
                     max_new_tokens=max_length,
                     temperature=temperature,
                     do_sample=temperature > 0,
-                    **kwargs
+                    **kwargs,
                 )
 
             # Decode and clean response
             generated_text = self.tokenizer.decode(outputs[0], skip_special_tokens=True)
-            response = generated_text[len(formatted_prompt):].strip()
+            response = generated_text[len(formatted_prompt) :].strip()
 
             return response
 
@@ -246,10 +235,7 @@ class TinyLlamaAdapter(LocalModelAdapter):
     """Adapter for TinyLlama-1.1B model (very lightweight)"""
 
     def __init__(self, cache_dir: Optional[str] = None):
-        super().__init__(
-            model_name="TinyLlama/TinyLlama-1.1B-Chat-v1.0",
-            cache_dir=cache_dir
-        )
+        super().__init__(model_name="TinyLlama/TinyLlama-1.1B-Chat-v1.0", cache_dir=cache_dir)
 
     def load_model(self):
         """Load TinyLlama model"""
@@ -257,23 +243,20 @@ class TinyLlamaAdapter(LocalModelAdapter):
 
         try:
             self.tokenizer = AutoTokenizer.from_pretrained(
-                self.model_name,
-                cache_dir=self.cache_dir
+                self.model_name, cache_dir=self.cache_dir
             )
 
             # Lighter configuration for smaller model
             model_config = {
                 "torch_dtype": torch.float16 if self.device != "cpu" else torch.float32,
-                "low_cpu_mem_usage": True
+                "low_cpu_mem_usage": True,
             }
 
             if self.device != "cpu":
                 model_config["device_map"] = self.device
 
             self.model = AutoModelForCausalLM.from_pretrained(
-                self.model_name,
-                cache_dir=self.cache_dir,
-                **model_config
+                self.model_name, cache_dir=self.cache_dir, **model_config
             )
 
             print(f"\u2713 {self.model_name} loaded successfully")
@@ -282,7 +265,9 @@ class TinyLlamaAdapter(LocalModelAdapter):
             print(f"\u2717 Error loading {self.model_name}: {e}")
             raise
 
-    def generate(self, prompt: str, max_length: int = 1000, temperature: float = 0.7, **kwargs) -> str:
+    def generate(
+        self, prompt: str, max_length: int = 1000, temperature: float = 0.7, **kwargs
+    ) -> str:
         """Generate response using TinyLlama"""
         if self.model is None or self.tokenizer is None:
             self.load_model()
@@ -302,11 +287,11 @@ class TinyLlamaAdapter(LocalModelAdapter):
                     max_new_tokens=max_length,
                     temperature=temperature,
                     do_sample=temperature > 0,
-                    **kwargs
+                    **kwargs,
                 )
 
             generated_text = self.tokenizer.decode(outputs[0], skip_special_tokens=True)
-            response = generated_text[len(formatted_prompt):].strip()
+            response = generated_text[len(formatted_prompt) :].strip()
 
             return response
 
@@ -319,10 +304,7 @@ class Phi2Adapter(LocalModelAdapter):
     """Adapter for Microsoft Phi-2 model (small but capable instruction model)"""
 
     def __init__(self, cache_dir: Optional[str] = None):
-        super().__init__(
-            model_name="microsoft/phi-2",
-            cache_dir=cache_dir
-        )
+        super().__init__(model_name="microsoft/phi-2", cache_dir=cache_dir)
 
     def load_model(self):
         """Load Phi-2 model"""
@@ -330,9 +312,7 @@ class Phi2Adapter(LocalModelAdapter):
 
         try:
             self.tokenizer = AutoTokenizer.from_pretrained(
-                self.model_name,
-                cache_dir=self.cache_dir,
-                trust_remote_code=True
+                self.model_name, cache_dir=self.cache_dir, trust_remote_code=True
             )
 
             if self.tokenizer.pad_token is None:
@@ -340,18 +320,20 @@ class Phi2Adapter(LocalModelAdapter):
 
             # Use float32 on MPS to avoid NaN issues with phi-2
             model_config = {
-                "torch_dtype": torch.float32 if self.device == "mps" else (torch.float16 if self.device != "cpu" else torch.float32),
+                "torch_dtype": (
+                    torch.float32
+                    if self.device == "mps"
+                    else (torch.float16 if self.device != "cpu" else torch.float32)
+                ),
                 "low_cpu_mem_usage": True,
-                "trust_remote_code": True
+                "trust_remote_code": True,
             }
 
             if self.device != "cpu":
                 model_config["device_map"] = self.device
 
             self.model = AutoModelForCausalLM.from_pretrained(
-                self.model_name,
-                cache_dir=self.cache_dir,
-                **model_config
+                self.model_name, cache_dir=self.cache_dir, **model_config
             )
 
             print(f"\u2713 {self.model_name} loaded successfully")
@@ -360,7 +342,9 @@ class Phi2Adapter(LocalModelAdapter):
             print(f"\u2717 Error loading {self.model_name}: {e}")
             raise
 
-    def generate(self, prompt: str, max_length: int = 1000, temperature: float = 0.7, **kwargs) -> str:
+    def generate(
+        self, prompt: str, max_length: int = 1000, temperature: float = 0.7, **kwargs
+    ) -> str:
         """Generate response using Phi-2"""
         if self.model is None or self.tokenizer is None:
             self.load_model()
@@ -369,7 +353,9 @@ class Phi2Adapter(LocalModelAdapter):
             # Phi-2 instruction format
             formatted_prompt = f"Instruct: {prompt}\nOutput:"
 
-            inputs = self.tokenizer(formatted_prompt, return_tensors="pt", truncation=True, max_length=2048)
+            inputs = self.tokenizer(
+                formatted_prompt, return_tensors="pt", truncation=True, max_length=2048
+            )
 
             if self.device != "cpu":
                 inputs = {k: v.to(self.device) for k, v in inputs.items()}
@@ -384,11 +370,11 @@ class Phi2Adapter(LocalModelAdapter):
                     do_sample=use_sampling,
                     pad_token_id=self.tokenizer.eos_token_id,
                     repetition_penalty=1.1,
-                    **kwargs
+                    **kwargs,
                 )
 
             generated_text = self.tokenizer.decode(outputs[0], skip_special_tokens=True)
-            response = generated_text[len(formatted_prompt):].strip()
+            response = generated_text[len(formatted_prompt) :].strip()
 
             return response
 
@@ -401,10 +387,7 @@ class Qwen2Adapter(LocalModelAdapter):
     """Adapter for Qwen2-0.5B-Instruct model (very small instruction model)"""
 
     def __init__(self, cache_dir: Optional[str] = None):
-        super().__init__(
-            model_name="Qwen/Qwen2-0.5B-Instruct",
-            cache_dir=cache_dir
-        )
+        super().__init__(model_name="Qwen/Qwen2-0.5B-Instruct", cache_dir=cache_dir)
 
     def load_model(self):
         """Load Qwen2 model"""
@@ -412,24 +395,20 @@ class Qwen2Adapter(LocalModelAdapter):
 
         try:
             self.tokenizer = AutoTokenizer.from_pretrained(
-                self.model_name,
-                cache_dir=self.cache_dir,
-                trust_remote_code=True
+                self.model_name, cache_dir=self.cache_dir, trust_remote_code=True
             )
 
             model_config = {
                 "torch_dtype": torch.float16 if self.device != "cpu" else torch.float32,
                 "low_cpu_mem_usage": True,
-                "trust_remote_code": True
+                "trust_remote_code": True,
             }
 
             if self.device != "cpu":
                 model_config["device_map"] = self.device
 
             self.model = AutoModelForCausalLM.from_pretrained(
-                self.model_name,
-                cache_dir=self.cache_dir,
-                **model_config
+                self.model_name, cache_dir=self.cache_dir, **model_config
             )
 
             print(f"\u2713 {self.model_name} loaded successfully")
@@ -438,7 +417,9 @@ class Qwen2Adapter(LocalModelAdapter):
             print(f"\u2717 Error loading {self.model_name}: {e}")
             raise
 
-    def generate(self, prompt: str, max_length: int = 1000, temperature: float = 0.7, **kwargs) -> str:
+    def generate(
+        self, prompt: str, max_length: int = 1000, temperature: float = 0.7, **kwargs
+    ) -> str:
         """Generate response using Qwen2"""
         if self.model is None or self.tokenizer is None:
             self.load_model()
@@ -450,7 +431,9 @@ class Qwen2Adapter(LocalModelAdapter):
                 messages, tokenize=False, add_generation_prompt=True
             )
 
-            inputs = self.tokenizer(formatted_prompt, return_tensors="pt", truncation=True, max_length=2048)
+            inputs = self.tokenizer(
+                formatted_prompt, return_tensors="pt", truncation=True, max_length=2048
+            )
 
             if self.device != "cpu":
                 inputs = {k: v.to(self.device) for k, v in inputs.items()}
@@ -463,7 +446,7 @@ class Qwen2Adapter(LocalModelAdapter):
                     do_sample=temperature > 0,
                     pad_token_id=self.tokenizer.eos_token_id,
                     repetition_penalty=1.1,
-                    **kwargs
+                    **kwargs,
                 )
 
             generated_text = self.tokenizer.decode(outputs[0], skip_special_tokens=True)
@@ -471,7 +454,7 @@ class Qwen2Adapter(LocalModelAdapter):
             if "assistant" in generated_text.lower():
                 response = generated_text.split("assistant")[-1].strip()
             else:
-                response = generated_text[len(formatted_prompt):].strip()
+                response = generated_text[len(formatted_prompt) :].strip()
 
             return response
 
@@ -494,9 +477,7 @@ class CodeLlamaAdapter(LocalModelAdapter):
 
         try:
             self.tokenizer = AutoTokenizer.from_pretrained(
-                self.model_name,
-                cache_dir=self.cache_dir,
-                trust_remote_code=True
+                self.model_name, cache_dir=self.cache_dir, trust_remote_code=True
             )
 
             if self.tokenizer.pad_token is None:
@@ -505,9 +486,7 @@ class CodeLlamaAdapter(LocalModelAdapter):
             model_config = get_model_config(self.model_size, self.device)
 
             self.model = AutoModelForCausalLM.from_pretrained(
-                self.model_name,
-                cache_dir=self.cache_dir,
-                **model_config
+                self.model_name, cache_dir=self.cache_dir, **model_config
             )
 
             print(f"\u2713 {self.model_name} loaded successfully")
@@ -516,7 +495,9 @@ class CodeLlamaAdapter(LocalModelAdapter):
             print(f"\u2717 Error loading {self.model_name}: {e}")
             raise
 
-    def generate(self, prompt: str, max_length: int = 1000, temperature: float = 0.7, **kwargs) -> str:
+    def generate(
+        self, prompt: str, max_length: int = 1000, temperature: float = 0.7, **kwargs
+    ) -> str:
         """Generate code using CodeLlama"""
         if self.model is None or self.tokenizer is None:
             self.load_model()
@@ -537,11 +518,11 @@ class CodeLlamaAdapter(LocalModelAdapter):
                     temperature=temperature,
                     do_sample=temperature > 0,
                     pad_token_id=self.tokenizer.eos_token_id,
-                    **kwargs
+                    **kwargs,
                 )
 
             generated_text = self.tokenizer.decode(outputs[0], skip_special_tokens=True)
-            response = generated_text[len(formatted_prompt):].strip()
+            response = generated_text[len(formatted_prompt) :].strip()
 
             return response
 
@@ -570,20 +551,15 @@ class Phi3Adapter(LocalModelAdapter):
 
         try:
             self.tokenizer = AutoTokenizer.from_pretrained(
-                self.model_name,
-                cache_dir=self.cache_dir,
-                trust_remote_code=True
+                self.model_name, cache_dir=self.cache_dir, trust_remote_code=True
             )
 
             model_config = get_model_config(
-                "3b" if self.model_size == "mini" else "7b",
-                self.device
+                "3b" if self.model_size == "mini" else "7b", self.device
             )
 
             self.model = AutoModelForCausalLM.from_pretrained(
-                self.model_name,
-                cache_dir=self.cache_dir,
-                **model_config
+                self.model_name, cache_dir=self.cache_dir, **model_config
             )
 
             print(f"\u2713 {self.model_name} loaded successfully")
@@ -592,7 +568,9 @@ class Phi3Adapter(LocalModelAdapter):
             print(f"\u2717 Error loading {self.model_name}: {e}")
             raise
 
-    def generate(self, prompt: str, max_length: int = 1000, temperature: float = 0.7, **kwargs) -> str:
+    def generate(
+        self, prompt: str, max_length: int = 1000, temperature: float = 0.7, **kwargs
+    ) -> str:
         """Generate response using Phi-3"""
         if self.model is None or self.tokenizer is None:
             self.load_model()
@@ -601,9 +579,7 @@ class Phi3Adapter(LocalModelAdapter):
             # Phi-3 chat format
             messages = [{"role": "user", "content": prompt}]
             formatted_prompt = self.tokenizer.apply_chat_template(
-                messages,
-                tokenize=False,
-                add_generation_prompt=True
+                messages, tokenize=False, add_generation_prompt=True
             )
 
             inputs = self.tokenizer(formatted_prompt, return_tensors="pt")
@@ -621,11 +597,11 @@ class Phi3Adapter(LocalModelAdapter):
                     do_sample=temperature > 0,
                     eos_token_id=self.tokenizer.eos_token_id,
                     use_cache=False,  # Fix for DynamicCache bug
-                    **kwargs
+                    **kwargs,
                 )
 
             generated_text = self.tokenizer.decode(outputs[0], skip_special_tokens=True)
-            response = generated_text[len(formatted_prompt):].strip()
+            response = generated_text[len(formatted_prompt) :].strip()
 
             return response
 

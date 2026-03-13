@@ -1,4 +1,5 @@
 """Base abstractions for MERIT metrics."""
+
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from typing import Any, Dict, Optional
@@ -7,6 +8,7 @@ from typing import Any, Dict, Optional
 @dataclass
 class MetricResult:
     """Standardized result from any MERIT metric."""
+
     score: float
     dimension: str
     details: Dict[str, Any] = field(default_factory=dict)

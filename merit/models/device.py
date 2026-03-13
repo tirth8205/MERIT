@@ -2,6 +2,7 @@
 
 Extends the core DeviceManager with model-loading utilities.
 """
+
 from merit.core.device import DeviceManager
 from typing import Dict
 
@@ -12,6 +13,7 @@ def get_memory_info() -> Dict:
 
     try:
         import psutil
+
         vm = psutil.virtual_memory()
         total_gb = vm.total / (1024**3)
         available_gb = vm.available / (1024**3)
@@ -62,20 +64,26 @@ def get_model_config(model_size: str, device: str) -> dict:
     }
 
     if device == "mps":
-        base_config.update({
-            "device_map": "mps",
-            "max_memory": {0: "6GiB"},
-        })
+        base_config.update(
+            {
+                "device_map": "mps",
+                "max_memory": {0: "6GiB"},
+            }
+        )
     elif device == "cuda":
-        base_config.update({
-            "device_map": "auto",
-            "max_memory": {0: "6GiB"},
-        })
+        base_config.update(
+            {
+                "device_map": "auto",
+                "max_memory": {0: "6GiB"},
+            }
+        )
     else:
-        base_config.update({
-            "torch_dtype": torch.float32,
-            "device_map": {"": "cpu"},
-        })
+        base_config.update(
+            {
+                "torch_dtype": torch.float32,
+                "device_map": {"": "cpu"},
+            }
+        )
 
     return base_config
 

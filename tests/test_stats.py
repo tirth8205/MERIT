@@ -1,4 +1,5 @@
 """Tests for statistical utilities."""
+
 import pytest
 import numpy as np
 from merit.utils.stats import bootstrap_ci, cohens_d, spearman_with_ci, aggregate_runs
@@ -105,6 +106,12 @@ class TestAggregateRuns:
         assert stats["n_runs"] == 1
 
     def test_ci_contains_mean(self):
-        runs = [[0.8, 0.7, 0.9], [0.85, 0.72, 0.88], [0.82, 0.71, 0.91], [0.79, 0.68, 0.87], [0.83, 0.73, 0.89]]
+        runs = [
+            [0.8, 0.7, 0.9],
+            [0.85, 0.72, 0.88],
+            [0.82, 0.71, 0.91],
+            [0.79, 0.68, 0.87],
+            [0.83, 0.73, 0.89],
+        ]
         stats = aggregate_runs(runs)
         assert stats["ci_low"] <= stats["mean"] <= stats["ci_high"]

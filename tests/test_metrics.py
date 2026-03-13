@@ -3,6 +3,7 @@ Tests for MERIT metrics (consistency, factual, reasoning, alignment).
 
 All metrics now return MetricResult objects instead of raw dicts.
 """
+
 import pytest
 import numpy as np
 from unittest.mock import Mock, patch
@@ -20,21 +21,25 @@ class TestDeviceManager:
 
     def test_get_optimal_device_cpu_fallback(self):
         """Test CPU fallback when no GPU available"""
-        with patch('torch.backends.mps.is_available', return_value=False), \
-             patch('torch.cuda.is_available', return_value=False):
+        with (
+            patch("torch.backends.mps.is_available", return_value=False),
+            patch("torch.cuda.is_available", return_value=False),
+        ):
             device = DeviceManager.get_optimal_device()
             assert device == "cpu"
 
     def test_get_optimal_device_mps(self):
         """Test MPS device selection"""
-        with patch('torch.backends.mps.is_available', return_value=True):
+        with patch("torch.backends.mps.is_available", return_value=True):
             device = DeviceManager.get_optimal_device()
             assert device == "mps"
 
     def test_get_optimal_device_cuda(self):
         """Test CUDA device selection"""
-        with patch('torch.backends.mps.is_available', return_value=False), \
-             patch('torch.cuda.is_available', return_value=True):
+        with (
+            patch("torch.backends.mps.is_available", return_value=False),
+            patch("torch.cuda.is_available", return_value=True),
+        ):
             device = DeviceManager.get_optimal_device()
             assert device == "cuda"
 
@@ -46,7 +51,7 @@ class TestLogicalConsistencyMetric:
     @pytest.fixture
     def metric(self):
         """Create metric instance for testing"""
-        with patch('merit.core.device.DeviceManager.get_optimal_device', return_value="cpu"):
+        with patch("merit.core.device.DeviceManager.get_optimal_device", return_value="cpu"):
             return LogicalConsistencyMetric()
 
     def test_consistent_text(self, metric):
@@ -86,7 +91,7 @@ class TestLogicalConsistencyMetric:
         assert isinstance(result, MetricResult)
         assert result.score == 1.0  # No contradictions possible
 
-    @patch('merit.core.consistency.nltk.data.find')
+    @patch("merit.core.consistency.nltk.data.find")
     def test_nltk_fallback(self, mock_find, metric):
         """Test fallback when NLTK data not available"""
         mock_find.side_effect = LookupError("Resource not found")
@@ -162,7 +167,7 @@ class TestReasoningStepMetric:
     @pytest.fixture
     def metric(self):
         """Create metric instance for testing"""
-        with patch('merit.core.device.DeviceManager.get_optimal_device', return_value="cpu"):
+        with patch("merit.core.device.DeviceManager.get_optimal_device", return_value="cpu"):
             return ReasoningStepMetric()
 
     def test_clear_reasoning_steps(self, metric):
@@ -294,12 +299,12 @@ class TestMetricIntegration:
 
     def test_all_metrics_return_metric_result(self):
         """Test that all metrics return MetricResult objects with consistent structure"""
-        with patch('merit.core.device.DeviceManager.get_optimal_device', return_value="cpu"):
+        with patch("merit.core.device.DeviceManager.get_optimal_device", return_value="cpu"):
             metrics = [
                 LogicalConsistencyMetric(),
                 FactualAccuracyMetric(),
                 ReasoningStepMetric(),
-                AlignmentMetric()
+                AlignmentMetric(),
             ]
 
         text = "First, we consider the evidence. The Earth is round, which is scientifically proven. Therefore, we should respect scientific knowledge and treat it fairly."
@@ -330,25 +335,25 @@ class TestMetricIntegration:
                 "expected_logical": lambda x: x > 0.8,
                 "expected_factual": lambda x: x >= 0.3,
                 "expected_reasoning": lambda x: x >= 0.1,
-                "expected_alignment": lambda x: x >= 0.3
+                "expected_alignment": lambda x: x >= 0.3,
             },
             {
                 "text": "First step. Second step. Therefore conclusion.",
                 "expected_logical": lambda x: x > 0.7,
                 "expected_factual": lambda x: x >= 0.3,
                 "expected_reasoning": lambda x: x >= 0.1,
-                "expected_alignment": lambda x: x >= 0.3
+                "expected_alignment": lambda x: x >= 0.3,
             },
             {
                 "text": "",
                 "expected_logical": lambda x: x == 0.0,
                 "expected_factual": lambda x: x == 0.0,
                 "expected_reasoning": lambda x: x == 0.0,
-                "expected_alignment": lambda x: x == 0.5
-            }
+                "expected_alignment": lambda x: x == 0.5,
+            },
         ]
 
-        with patch('merit.core.device.DeviceManager.get_optimal_device', return_value="cpu"):
+        with patch("merit.core.device.DeviceManager.get_optimal_device", return_value="cpu"):
             logical_metric = LogicalConsistencyMetric()
             factual_metric = FactualAccuracyMetric()
             reasoning_metric = ReasoningStepMetric()
@@ -370,12 +375,16 @@ class TestMetricIntegration:
             # Check expectations
             assert case["expected_logical"](logical_result.score), f"Logical failed for case {i}"
             assert case["expected_factual"](factual_result.score), f"Factual failed for case {i}"
-            assert case["expected_reasoning"](reasoning_result.score), f"Reasoning failed for case {i}"
-            assert case["expected_alignment"](alignment_result.score), f"Alignment failed for case {i}"
+            assert case["expected_reasoning"](
+                reasoning_result.score
+            ), f"Reasoning failed for case {i}"
+            assert case["expected_alignment"](
+                alignment_result.score
+            ), f"Alignment failed for case {i}"
 
     def test_metric_result_to_dict(self):
         """Test MetricResult.to_dict() works correctly for all metrics"""
-        with patch('merit.core.device.DeviceManager.get_optimal_device', return_value="cpu"):
+        with patch("merit.core.device.DeviceManager.get_optimal_device", return_value="cpu"):
             metric = LogicalConsistencyMetric()
 
         result = metric.compute("The sky is blue. Water is wet.")
@@ -393,7 +402,7 @@ class TestMetricIntegration:
 @pytest.mark.parametrize("device", ["cpu", "mps", "cuda"])
 def test_device_compatibility(device):
     """Test metrics work on different devices"""
-    with patch('merit.core.device.DeviceManager.get_optimal_device', return_value=device):
+    with patch("merit.core.device.DeviceManager.get_optimal_device", return_value=device):
         try:
             metric = LogicalConsistencyMetric()
             result = metric.compute("Test sentence for device compatibility.")
@@ -414,7 +423,7 @@ def test_device_compatibility(device):
 @pytest.mark.slow
 def test_metric_error_handling():
     """Test metrics handle errors gracefully"""
-    with patch('merit.core.device.DeviceManager.get_optimal_device', return_value="cpu"):
+    with patch("merit.core.device.DeviceManager.get_optimal_device", return_value="cpu"):
         metric = LogicalConsistencyMetric()
 
     # Test with problematic input

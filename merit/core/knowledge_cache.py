@@ -1,4 +1,5 @@
 """Cached knowledge base for reproducible fact verification."""
+
 import json
 from pathlib import Path
 from typing import Optional, Dict, Any

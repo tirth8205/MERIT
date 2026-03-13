@@ -1,4 +1,5 @@
 """Base model adapter abstraction."""
+
 from abc import ABC, abstractmethod
 
 

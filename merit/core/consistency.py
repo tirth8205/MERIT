@@ -1,4 +1,5 @@
 """Logical consistency metric for MERIT."""
+
 import re
 from typing import Dict, List, Optional
 
@@ -14,14 +15,14 @@ from merit.core.device import DeviceManager
 
 # Download required NLTK data
 try:
-    nltk.data.find('vader_lexicon')
+    nltk.data.find("vader_lexicon")
 except LookupError:
-    nltk.download('vader_lexicon', quiet=True)
+    nltk.download("vader_lexicon", quiet=True)
 
 try:
-    nltk.data.find('punkt')
+    nltk.data.find("punkt")
 except LookupError:
-    nltk.download('punkt', quiet=True)
+    nltk.download("punkt", quiet=True)
 
 
 class LogicalConsistencyMetric(BaseMetric):
@@ -51,7 +52,9 @@ class LogicalConsistencyMetric(BaseMetric):
         try:
             self.nlp = spacy.load("en_core_web_sm")
         except OSError:
-            print("Warning: spaCy model 'en_core_web_sm' not found. Install with: python -m spacy download en_core_web_sm")
+            print(
+                "Warning: spaCy model 'en_core_web_sm' not found. Install with: python -m spacy download en_core_web_sm"
+            )
             self.nlp = None
 
         # Initialize sentiment analyzer
@@ -59,36 +62,42 @@ class LogicalConsistencyMetric(BaseMetric):
 
         # Logical fallacy patterns
         self.fallacy_patterns = {
-            'circular_reasoning': [
-                r'(.+)\s+because\s+(.+)\s+because\s+\1',
-                r'(.+)\s+since\s+(.+)\s+since\s+\1'
+            "circular_reasoning": [
+                r"(.+)\s+because\s+(.+)\s+because\s+\1",
+                r"(.+)\s+since\s+(.+)\s+since\s+\1",
             ],
-            'contradiction': [
-                r'(.+)\s+but\s+(.+\s+not\s+.+)',
-                r'(.+\s+always\s+.+)\s+but\s+(.+\s+never\s+.+)'
+            "contradiction": [
+                r"(.+)\s+but\s+(.+\s+not\s+.+)",
+                r"(.+\s+always\s+.+)\s+but\s+(.+\s+never\s+.+)",
             ],
-            'false_dichotomy': [
-                r'either\s+(.+)\s+or\s+(.+),?\s+(no|not)\s+(other|alternative)',
-                r'only\s+two\s+(options|choices|ways)'
-            ]
+            "false_dichotomy": [
+                r"either\s+(.+)\s+or\s+(.+),?\s+(no|not)\s+(other|alternative)",
+                r"only\s+two\s+(options|choices|ways)",
+            ],
         }
 
     def compute(self, response: str, reference: Optional[str] = None, **kwargs) -> MetricResult:
         """Compute enhanced logical consistency."""
         if not response.strip():
-            return MetricResult(score=0.0, dimension=self.dimension, details={"analysis": "Empty prediction"})
+            return MetricResult(
+                score=0.0, dimension=self.dimension, details={"analysis": "Empty prediction"}
+            )
 
         # Split into sentences
         sentences = self._extract_sentences(response)
         if len(sentences) <= 1:
-            return MetricResult(score=1.0, dimension=self.dimension, details={"analysis": "Single sentence - no consistency issues"})
+            return MetricResult(
+                score=1.0,
+                dimension=self.dimension,
+                details={"analysis": "Single sentence - no consistency issues"},
+            )
 
         analysis = {
             "total_sentences": len(sentences),
             "semantic_contradictions": [],
             "logical_fallacies": {},
             "sentiment_contradictions": [],
-            "dependency_issues": []
+            "dependency_issues": [],
         }
 
         # Detect semantic contradictions
@@ -111,11 +120,17 @@ class LogicalConsistencyMetric(BaseMetric):
         details = {
             "analysis": analysis,
             "detailed_breakdown": {
-                "semantic_consistency": 1.0 - (len(analysis["semantic_contradictions"]) / max(1, len(sentences) * (len(sentences) - 1) / 2)),
+                "semantic_consistency": 1.0
+                - (
+                    len(analysis["semantic_contradictions"])
+                    / max(1, len(sentences) * (len(sentences) - 1) / 2)
+                ),
                 "logical_fallacy_penalty": len(analysis["logical_fallacies"]) * 0.1,
-                "sentiment_consistency": 1.0 - (len(analysis["sentiment_contradictions"]) / max(1, len(sentences))),
-                "dependency_consistency": 1.0 - (len(analysis["dependency_issues"]) / max(1, len(sentences)))
-            }
+                "sentiment_consistency": 1.0
+                - (len(analysis["sentiment_contradictions"]) / max(1, len(sentences))),
+                "dependency_consistency": 1.0
+                - (len(analysis["dependency_issues"]) / max(1, len(sentences))),
+            },
         }
 
         return MetricResult(score=consistency_score, dimension=self.dimension, details=details)
@@ -130,10 +145,11 @@ class LogicalConsistencyMetric(BaseMetric):
             # Fallback to NLTK
             try:
                 from nltk.tokenize import sent_tokenize
+
                 return [s.strip() for s in sent_tokenize(text) if s.strip()]
             except:
                 # Final fallback to regex
-                sentences = re.split(r'[.!?]+', text)
+                sentences = re.split(r"[.!?]+", text)
                 return [s.strip() for s in sentences if s.strip()]
 
     def _detect_semantic_contradictions(self, sentences: List[str]) -> List[Dict]:
@@ -144,7 +160,7 @@ class LogicalConsistencyMetric(BaseMetric):
         embeddings = self.sentence_model.encode(sentences)
 
         for i, sent1 in enumerate(sentences):
-            for j, sent2 in enumerate(sentences[i+1:], i+1):
+            for j, sent2 in enumerate(sentences[i + 1 :], i + 1):
                 emb1, emb2 = embeddings[i], embeddings[j]
 
                 # Calculate semantic similarity
@@ -156,25 +172,30 @@ class LogicalConsistencyMetric(BaseMetric):
                     sent2_sentiment = self.sentiment_analyzer.polarity_scores(sent2)
 
                     # Check for opposite sentiment polarities
-                    if (sent1_sentiment['compound'] > 0.1 and sent2_sentiment['compound'] < -0.1) or \
-                       (sent1_sentiment['compound'] < -0.1 and sent2_sentiment['compound'] > 0.1):
-                        contradictions.append({
-                            "sentence1": sent1,
-                            "sentence2": sent2,
-                            "similarity": float(similarity),
-                            "sentiment1": sent1_sentiment['compound'],
-                            "sentiment2": sent2_sentiment['compound'],
-                            "type": "semantic_sentiment_contradiction"
-                        })
+                    if (
+                        sent1_sentiment["compound"] > 0.1 and sent2_sentiment["compound"] < -0.1
+                    ) or (sent1_sentiment["compound"] < -0.1 and sent2_sentiment["compound"] > 0.1):
+                        contradictions.append(
+                            {
+                                "sentence1": sent1,
+                                "sentence2": sent2,
+                                "similarity": float(similarity),
+                                "sentiment1": sent1_sentiment["compound"],
+                                "sentiment2": sent2_sentiment["compound"],
+                                "type": "semantic_sentiment_contradiction",
+                            }
+                        )
 
                 # Check for explicit negations
                 if self._are_explicit_negations(sent1, sent2, similarity):
-                    contradictions.append({
-                        "sentence1": sent1,
-                        "sentence2": sent2,
-                        "similarity": float(similarity),
-                        "type": "explicit_negation"
-                    })
+                    contradictions.append(
+                        {
+                            "sentence1": sent1,
+                            "sentence2": sent2,
+                            "similarity": float(similarity),
+                            "type": "explicit_negation",
+                        }
+                    )
 
         return contradictions
 
@@ -188,8 +209,22 @@ class LogicalConsistencyMetric(BaseMetric):
         s2_lower = sent2.lower()
 
         # Check for negation patterns
-        negation_words = ["not", "never", "no", "isn't", "aren't", "wasn't", "weren't",
-                         "doesn't", "don't", "didn't", "won't", "wouldn't", "can't", "cannot"]
+        negation_words = [
+            "not",
+            "never",
+            "no",
+            "isn't",
+            "aren't",
+            "wasn't",
+            "weren't",
+            "doesn't",
+            "don't",
+            "didn't",
+            "won't",
+            "wouldn't",
+            "can't",
+            "cannot",
+        ]
 
         # Count negations in each sentence
         s1_negations = sum(1 for neg in negation_words if neg in s1_lower)
@@ -220,33 +255,52 @@ class LogicalConsistencyMetric(BaseMetric):
         contradictions = []
 
         for i, sent1 in enumerate(sentences):
-            for sent2 in sentences[i+1:]:
+            for sent2 in sentences[i + 1 :]:
                 # Get sentiment scores
                 sent1_sentiment = self.sentiment_analyzer.polarity_scores(sent1)
                 sent2_sentiment = self.sentiment_analyzer.polarity_scores(sent2)
 
                 # Check if they have strongly opposite sentiments
-                if abs(sent1_sentiment['compound'] - sent2_sentiment['compound']) > 1.0:
+                if abs(sent1_sentiment["compound"] - sent2_sentiment["compound"]) > 1.0:
                     # Check if they're about similar topics (using keyword overlap)
                     if self._have_topic_overlap(sent1, sent2):
-                        contradictions.append({
-                            "sentence1": sent1,
-                            "sentence2": sent2,
-                            "sentiment1": sent1_sentiment['compound'],
-                            "sentiment2": sent2_sentiment['compound'],
-                            "sentiment_difference": abs(sent1_sentiment['compound'] - sent2_sentiment['compound'])
-                        })
+                        contradictions.append(
+                            {
+                                "sentence1": sent1,
+                                "sentence2": sent2,
+                                "sentiment1": sent1_sentiment["compound"],
+                                "sentiment2": sent2_sentiment["compound"],
+                                "sentiment_difference": abs(
+                                    sent1_sentiment["compound"] - sent2_sentiment["compound"]
+                                ),
+                            }
+                        )
 
         return contradictions
 
     def _have_topic_overlap(self, sent1: str, sent2: str) -> bool:
         """Check if two sentences have significant topic overlap"""
         # Simple keyword-based approach
-        words1 = set(re.findall(r'\w+', sent1.lower()))
-        words2 = set(re.findall(r'\w+', sent2.lower()))
+        words1 = set(re.findall(r"\w+", sent1.lower()))
+        words2 = set(re.findall(r"\w+", sent2.lower()))
 
         # Remove common stop words
-        stop_words = {"the", "is", "at", "which", "on", "and", "a", "to", "are", "as", "an", "be", "or", "will"}
+        stop_words = {
+            "the",
+            "is",
+            "at",
+            "which",
+            "on",
+            "and",
+            "a",
+            "to",
+            "are",
+            "as",
+            "an",
+            "be",
+            "or",
+            "will",
+        }
         words1 -= stop_words
         words2 -= stop_words
 
@@ -269,23 +323,23 @@ class LogicalConsistencyMetric(BaseMetric):
             # Check for incomplete dependencies
             for token in sent:
                 if token.dep_ == "ROOT" and token.pos_ not in ["VERB", "AUX"]:
-                    issues.append({
-                        "type": "incomplete_sentence",
-                        "token": token.text,
-                        "sentence": sent.text
-                    })
+                    issues.append(
+                        {"type": "incomplete_sentence", "token": token.text, "sentence": sent.text}
+                    )
 
                 # Check for dangling modifiers
                 if token.dep_ in ["amod", "advmod"] and not list(token.children):
                     # Find what it's modifying
                     head = token.head
                     if head.pos_ not in ["NOUN", "VERB", "ADJ", "ADV"]:
-                        issues.append({
-                            "type": "dangling_modifier",
-                            "modifier": token.text,
-                            "head": head.text,
-                            "sentence": sent.text
-                        })
+                        issues.append(
+                            {
+                                "type": "dangling_modifier",
+                                "modifier": token.text,
+                                "head": head.text,
+                                "sentence": sent.text,
+                            }
+                        )
 
         return issues
 
@@ -297,7 +351,9 @@ class LogicalConsistencyMetric(BaseMetric):
         semantic_penalty = len(analysis["semantic_contradictions"]) * 0.2
 
         # Penalty for logical fallacies
-        fallacy_penalty = sum(len(matches) for matches in analysis["logical_fallacies"].values()) * 0.15
+        fallacy_penalty = (
+            sum(len(matches) for matches in analysis["logical_fallacies"].values()) * 0.15
+        )
 
         # Penalty for sentiment contradictions
         sentiment_penalty = len(analysis["sentiment_contradictions"]) * 0.1
@@ -306,7 +362,9 @@ class LogicalConsistencyMetric(BaseMetric):
         dependency_penalty = len(analysis["dependency_issues"]) * 0.05
 
         # Calculate final score
-        final_score = base_score - semantic_penalty - fallacy_penalty - sentiment_penalty - dependency_penalty
+        final_score = (
+            base_score - semantic_penalty - fallacy_penalty - sentiment_penalty - dependency_penalty
+        )
 
         return max(0.0, min(1.0, final_score))
 

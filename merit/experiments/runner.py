@@ -1,4 +1,5 @@
 """Experiment runner for MERIT."""
+
 import json
 import uuid
 from pathlib import Path
@@ -23,6 +24,7 @@ class ExperimentRunner:
 
         # Initialize components (lazy imports to avoid heavy deps at module level)
         from merit.models.manager import ModelManager
+
         self.model_manager = ModelManager()
         self.metrics = self._initialize_metrics()
         self.baselines = self._initialize_baselines()
@@ -33,7 +35,7 @@ class ExperimentRunner:
             "experiment_name": config.experiment_name,
             "config": asdict(config),
             "start_time": datetime.now().isoformat(),
-            "model_results": {}
+            "model_results": {},
         }
 
     def _initialize_metrics(self) -> Dict[str, Any]:
@@ -53,6 +55,7 @@ class ExperimentRunner:
                 ReasoningStepMetric,
                 AlignmentMetric,
             )
+
             metric_map = {
                 "logical_consistency": LogicalConsistencyMetric(),
                 "factual_accuracy": FactualAccuracyMetric(),
@@ -65,6 +68,7 @@ class ExperimentRunner:
 
         if mode in ("llm_judge", "both"):
             from merit.core.llm_judge import LLMJudge
+
             result["llm_judge"] = LLMJudge()
 
         return result
@@ -97,11 +101,13 @@ class ExperimentRunner:
     @staticmethod
     def _make_bertscore():
         from merit.baselines.bertscore import BERTScoreBaseline
+
         return BERTScoreBaseline()
 
     @staticmethod
     def _make_geval():
         from merit.baselines.geval import GEvalBaseline
+
         return GEvalBaseline()
 
     def run_full_experiment(self) -> Dict[str, Any]:
@@ -139,10 +145,7 @@ class ExperimentRunner:
 
     def _evaluate_model(self, model_name: str) -> Dict[str, Any]:
         """Evaluate a single model"""
-        model_results = {
-            "model_name": model_name,
-            "benchmarks": {}
-        }
+        model_results = {"model_name": model_name, "benchmarks": {}}
 
         # Load model
         print(f"Loading model: {model_name}")
@@ -156,19 +159,13 @@ class ExperimentRunner:
         for benchmark in self.config.benchmarks:
             print(f"\n  Benchmark: {benchmark}")
 
-            benchmark_results = {
-                "sample_sizes": {}
-            }
+            benchmark_results = {"sample_sizes": {}}
 
             # Run for each sample size
             for sample_size in self.config.sample_sizes:
                 print(f"    Sample size: {sample_size}")
 
-                size_results = self._run_benchmark(
-                    model_adapter,
-                    benchmark,
-                    sample_size
-                )
+                size_results = self._run_benchmark(model_adapter, benchmark, sample_size)
 
                 benchmark_results["sample_sizes"][str(sample_size)] = size_results
 
@@ -181,10 +178,7 @@ class ExperimentRunner:
 
     def _run_benchmark(self, model_adapter, benchmark: str, sample_size: int) -> Dict[str, Any]:
         """Run evaluation on a benchmark"""
-        results = {
-            "runs": [],
-            "statistics": {}
-        }
+        results = {"runs": [], "statistics": {}}
 
         # Load dataset using standalone function
         dataset = load_dataset(
@@ -233,7 +227,7 @@ class ExperimentRunner:
                 response = model_adapter.generate(
                     item["prompt"],
                     max_length=self.config.max_tokens,
-                    temperature=self.config.temperature
+                    temperature=self.config.temperature,
                     # Note: repetition_penalty is handled by each model adapter
                 )
             except Exception as e:
@@ -262,9 +256,7 @@ class ExperimentRunner:
             if llm_judge is not None:
                 try:
                     judge_results = llm_judge.evaluate_all(response, reference)
-                    judge_item = {
-                        dim: r.score for dim, r in judge_results.items()
-                    }
+                    judge_item = {dim: r.score for dim, r in judge_results.items()}
                 except Exception as e:
                     print(f"        Error in LLM judge for item {idx}: {e}")
                     judge_item = {}
@@ -292,19 +284,21 @@ class ExperimentRunner:
                 response,
                 reference,
                 item.get("reference_letter", ""),
-                item.get("task_type", "default")
+                item.get("task_type", "default"),
             )
             if is_correct:
                 correct_count += 1
 
-            individual_results.append({
-                "prompt": item["prompt"],
-                "response": response,
-                "reference": reference,
-                "reference_letter": item.get("reference_letter", ""),
-                "metrics": item_metrics,
-                "correct": is_correct
-            })
+            individual_results.append(
+                {
+                    "prompt": item["prompt"],
+                    "response": response,
+                    "reference": reference,
+                    "reference_letter": item.get("reference_letter", ""),
+                    "metrics": item_metrics,
+                    "correct": is_correct,
+                }
+            )
 
         # --- Build aggregated results ---
         result: Dict[str, Any] = {
@@ -336,7 +330,9 @@ class ExperimentRunner:
 
         return result
 
-    def _check_answer_correctness(self, response: str, reference: str, reference_letter: str, task_type: str) -> bool:
+    def _check_answer_correctness(
+        self, response: str, reference: str, reference_letter: str, task_type: str
+    ) -> bool:
         """Check if the response contains the correct answer"""
         response_lower = response.lower().strip()
         reference_lower = reference.lower().strip()
@@ -348,10 +344,10 @@ class ExperimentRunner:
 
             # Check various patterns for answer selection
             patterns = [
-                f"({letter})",           # (A)
-                f"{letter})",            # A)
-                f"{letter}.",            # A.
-                f"{letter}:",            # A:
+                f"({letter})",  # (A)
+                f"{letter})",  # A)
+                f"{letter}.",  # A.
+                f"{letter}:",  # A:
                 f"answer is {letter_lower}",
                 f"answer: {letter_lower}",
                 f"choose {letter_lower}",
@@ -465,7 +461,7 @@ class ExperimentRunner:
 
             results_file = self.output_dir / "experiment_results.json"
 
-            with open(results_file, 'w') as f:
+            with open(results_file, "w") as f:
                 json.dump(self.results, f, indent=2, default=str)
 
             print(f"\nResults saved to: {results_file}")
@@ -491,5 +487,5 @@ def create_default_config(experiment_name: str = "merit_experiment") -> Experime
         baseline_methods=["bert_score"],
         statistical_tests=["t_test"],
         output_dir="experiments",
-        use_instruction_format=True
+        use_instruction_format=True,
     )
