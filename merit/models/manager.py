@@ -1,4 +1,5 @@
 """Model manager for MERIT — coordinates loading, unloading, and benchmarking."""
+
 import time
 from typing import Dict, List, Optional
 
@@ -6,6 +7,7 @@ import numpy as np
 
 try:
     import requests
+
     OLLAMA_AVAILABLE = True
 except ImportError:
     OLLAMA_AVAILABLE = False
@@ -46,36 +48,36 @@ class ModelManager:
                 "type": "Instruction-tuned",
                 "memory_requirement": "~16GB",
                 "license": "Llama 3.1 Community",
-                "description": "Meta's Llama-3.1 8B instruction model - best benchmarked"
+                "description": "Meta's Llama-3.1 8B instruction model - best benchmarked",
             },
             "mistral-7b-instruct": {
                 "parameters": "7B",
                 "type": "Instruction-tuned",
                 "memory_requirement": "~14GB",
                 "license": "Apache 2.0",
-                "description": "Mistral AI's 7B instruction model"
+                "description": "Mistral AI's 7B instruction model",
             },
             "tinyllama-1b": {
                 "parameters": "1.1B",
                 "type": "Chat-tuned",
                 "memory_requirement": "~2GB",
                 "license": "Apache 2.0",
-                "description": "Lightweight TinyLlama chat model - good for quick tests"
+                "description": "Lightweight TinyLlama chat model - good for quick tests",
             },
             "phi-2": {
                 "parameters": "2.7B",
                 "type": "Instruction-tuned",
                 "memory_requirement": "~6GB",
                 "license": "MIT",
-                "description": "Microsoft Phi-2 - excellent reasoning for its size"
+                "description": "Microsoft Phi-2 - excellent reasoning for its size",
             },
             "qwen2-0.5b": {
                 "parameters": "0.5B",
                 "type": "Instruction-tuned",
                 "memory_requirement": "~1GB",
                 "license": "Apache 2.0",
-                "description": "Qwen2-0.5B-Instruct - smallest instruction model"
-            }
+                "description": "Qwen2-0.5B-Instruct - smallest instruction model",
+            },
         }
 
     def get_recommended_models(self, memory_constraint_gb: int = 8) -> List[str]:
@@ -99,7 +101,9 @@ class ModelManager:
     def load_model(self, model_name: str) -> LocalModelAdapter:
         """Load a specific model"""
         if model_name not in self.available_models:
-            raise ValueError(f"Model {model_name} not available. Options: {list(self.available_models.keys())}")
+            raise ValueError(
+                f"Model {model_name} not available. Options: {list(self.available_models.keys())}"
+            )
 
         if model_name in self.loaded_models:
             print(f"Model {model_name} already loaded")
@@ -133,19 +137,21 @@ class ModelManager:
         """List all available models with their info"""
         return self.model_info
 
-    def benchmark_models(self, models: List[str], test_prompts: List[str],
-                        max_length: int = 500, temperature: float = 0.7) -> Dict:
+    def benchmark_models(
+        self,
+        models: List[str],
+        test_prompts: List[str],
+        max_length: int = 500,
+        temperature: float = 0.7,
+    ) -> Dict:
         """Benchmark multiple models on test prompts"""
 
         results = {
             "models_tested": models,
             "test_prompts": test_prompts,
-            "configuration": {
-                "max_length": max_length,
-                "temperature": temperature
-            },
+            "configuration": {"max_length": max_length, "temperature": temperature},
             "results": {},
-            "performance_metrics": {}
+            "performance_metrics": {},
         }
 
         for model_name in models:
@@ -163,21 +169,25 @@ class ModelManager:
 
                     start_time = time.time()
                     response = adapter.generate(
-                        prompt,
-                        max_length=max_length,
-                        temperature=temperature
+                        prompt, max_length=max_length, temperature=temperature
                     )
                     end_time = time.time()
 
                     generation_time = end_time - start_time
                     total_time += generation_time
 
-                    model_results.append({
-                        "prompt": prompt,
-                        "response": response,
-                        "generation_time": generation_time,
-                        "tokens_per_second": len(response.split()) / generation_time if generation_time > 0 else 0
-                    })
+                    model_results.append(
+                        {
+                            "prompt": prompt,
+                            "response": response,
+                            "generation_time": generation_time,
+                            "tokens_per_second": (
+                                len(response.split()) / generation_time
+                                if generation_time > 0
+                                else 0
+                            ),
+                        }
+                    )
 
                 # Calculate performance metrics
                 avg_time = total_time / len(test_prompts) if test_prompts else 0
@@ -188,7 +198,7 @@ class ModelManager:
                     "average_generation_time": avg_time,
                     "total_time": total_time,
                     "average_tokens_per_second": avg_tokens_per_sec,
-                    "model_info": self.get_model_info(model_name)
+                    "model_info": self.get_model_info(model_name),
                 }
 
                 # Unload model to free memory for next one
@@ -208,8 +218,10 @@ class ModelManager:
         report.append("=" * 35)
         report.append(f"Models tested: {len(benchmark_results['models_tested'])}")
         report.append(f"Test prompts: {len(benchmark_results['test_prompts'])}")
-        report.append(f"Configuration: max_length={benchmark_results['configuration']['max_length']}, "
-                     f"temperature={benchmark_results['configuration']['temperature']}")
+        report.append(
+            f"Configuration: max_length={benchmark_results['configuration']['max_length']}, "
+            f"temperature={benchmark_results['configuration']['temperature']}"
+        )
         report.append("")
 
         # Performance summary
@@ -220,8 +232,7 @@ class ModelManager:
 
         # Sort by average generation time
         sorted_models = sorted(
-            perf_metrics.items(),
-            key=lambda x: x[1].get("average_generation_time", float('inf'))
+            perf_metrics.items(), key=lambda x: x[1].get("average_generation_time", float("inf"))
         )
 
         for model_name, metrics in sorted_models:
@@ -252,7 +263,7 @@ class ModelManager:
                 report.append("")
 
         # Save report
-        with open(output_file, 'w') as f:
+        with open(output_file, "w") as f:
             f.write("\n".join(report))
 
         print(f"Benchmark report saved to: {output_file}")
@@ -285,101 +296,102 @@ class EnhancedModelManager(ModelManager):
             self.available_models[name] = name  # placeholder; load_model is overridden
 
         # Update model info
-        self.model_info.update({
-            "codellama-7b": {
-                "parameters": "7B",
-                "type": "Code-specialized",
-                "memory_requirement": "~14GB",
-                "license": "Custom (Meta)",
-                "description": "Meta's CodeLlama 7B for code generation"
-            },
-            "codellama-13b": {
-                "parameters": "13B",
-                "type": "Code-specialized",
-                "memory_requirement": "~26GB",
-                "license": "Custom (Meta)",
-                "description": "Meta's CodeLlama 13B for complex coding tasks"
-            },
-            "phi3-mini": {
-                "parameters": "3.8B",
-                "type": "Instruction-tuned",
-                "memory_requirement": "~8GB",
-                "license": "MIT",
-                "description": "Microsoft's efficient Phi-3 Mini model"
-            },
-            "phi3-small": {
-                "parameters": "7B",
-                "type": "Instruction-tuned",
-                "memory_requirement": "~14GB",
-                "license": "MIT",
-                "description": "Microsoft's Phi-3 Small model"
-            },
-
-            # Ollama models
-            "ollama-llama2": {
-                "parameters": "7B",
-                "type": "Chat-tuned (Ollama)",
-                "memory_requirement": "~4GB",
-                "license": "Custom (Meta)",
-                "description": "Llama2 via Ollama (quantized)"
-            },
-            "ollama-llama2-13b": {
-                "parameters": "13B",
-                "type": "Chat-tuned (Ollama)",
-                "memory_requirement": "~8GB",
-                "license": "Custom (Meta)",
-                "description": "Llama2 13B via Ollama (quantized)"
-            },
-            "ollama-mistral": {
-                "parameters": "7B",
-                "type": "Instruction-tuned (Ollama)",
-                "memory_requirement": "~4GB",
-                "license": "Apache 2.0",
-                "description": "Mistral 7B via Ollama (quantized)"
-            },
-            "ollama-codellama": {
-                "parameters": "7B",
-                "type": "Code-specialized (Ollama)",
-                "memory_requirement": "~4GB",
-                "license": "Custom (Meta)",
-                "description": "CodeLlama via Ollama (quantized)"
-            },
-            "ollama-phi3": {
-                "parameters": "3.8B",
-                "type": "Instruction-tuned (Ollama)",
-                "memory_requirement": "~2GB",
-                "license": "MIT",
-                "description": "Phi-3 via Ollama (quantized)"
-            },
-            "ollama-gemma": {
-                "parameters": "7B",
-                "type": "Instruction-tuned (Ollama)",
-                "memory_requirement": "~4GB",
-                "license": "Apache 2.0",
-                "description": "Google's Gemma via Ollama (quantized)"
-            },
-            "ollama-qwen": {
-                "parameters": "7B",
-                "type": "Chat-tuned (Ollama)",
-                "memory_requirement": "~4GB",
-                "license": "Custom (Alibaba)",
-                "description": "Qwen via Ollama (quantized)"
-            },
-            "ollama-deepseek-coder": {
-                "parameters": "6.7B",
-                "type": "Code-specialized (Ollama)",
-                "memory_requirement": "~4GB",
-                "license": "Custom",
-                "description": "DeepSeek Coder via Ollama (quantized)"
-            },
-            "ollama-wizardcoder": {
-                "parameters": "15B",
-                "type": "Code-specialized (Ollama)",
-                "memory_requirement": "~8GB",
-                "license": "Custom",
-                "description": "WizardCoder via Ollama (quantized)"
+        self.model_info.update(
+            {
+                "codellama-7b": {
+                    "parameters": "7B",
+                    "type": "Code-specialized",
+                    "memory_requirement": "~14GB",
+                    "license": "Custom (Meta)",
+                    "description": "Meta's CodeLlama 7B for code generation",
+                },
+                "codellama-13b": {
+                    "parameters": "13B",
+                    "type": "Code-specialized",
+                    "memory_requirement": "~26GB",
+                    "license": "Custom (Meta)",
+                    "description": "Meta's CodeLlama 13B for complex coding tasks",
+                },
+                "phi3-mini": {
+                    "parameters": "3.8B",
+                    "type": "Instruction-tuned",
+                    "memory_requirement": "~8GB",
+                    "license": "MIT",
+                    "description": "Microsoft's efficient Phi-3 Mini model",
+                },
+                "phi3-small": {
+                    "parameters": "7B",
+                    "type": "Instruction-tuned",
+                    "memory_requirement": "~14GB",
+                    "license": "MIT",
+                    "description": "Microsoft's Phi-3 Small model",
+                },
+                # Ollama models
+                "ollama-llama2": {
+                    "parameters": "7B",
+                    "type": "Chat-tuned (Ollama)",
+                    "memory_requirement": "~4GB",
+                    "license": "Custom (Meta)",
+                    "description": "Llama2 via Ollama (quantized)",
+                },
+                "ollama-llama2-13b": {
+                    "parameters": "13B",
+                    "type": "Chat-tuned (Ollama)",
+                    "memory_requirement": "~8GB",
+                    "license": "Custom (Meta)",
+                    "description": "Llama2 13B via Ollama (quantized)",
+                },
+                "ollama-mistral": {
+                    "parameters": "7B",
+                    "type": "Instruction-tuned (Ollama)",
+                    "memory_requirement": "~4GB",
+                    "license": "Apache 2.0",
+                    "description": "Mistral 7B via Ollama (quantized)",
+                },
+                "ollama-codellama": {
+                    "parameters": "7B",
+                    "type": "Code-specialized (Ollama)",
+                    "memory_requirement": "~4GB",
+                    "license": "Custom (Meta)",
+                    "description": "CodeLlama via Ollama (quantized)",
+                },
+                "ollama-phi3": {
+                    "parameters": "3.8B",
+                    "type": "Instruction-tuned (Ollama)",
+                    "memory_requirement": "~2GB",
+                    "license": "MIT",
+                    "description": "Phi-3 via Ollama (quantized)",
+                },
+                "ollama-gemma": {
+                    "parameters": "7B",
+                    "type": "Instruction-tuned (Ollama)",
+                    "memory_requirement": "~4GB",
+                    "license": "Apache 2.0",
+                    "description": "Google's Gemma via Ollama (quantized)",
+                },
+                "ollama-qwen": {
+                    "parameters": "7B",
+                    "type": "Chat-tuned (Ollama)",
+                    "memory_requirement": "~4GB",
+                    "license": "Custom (Alibaba)",
+                    "description": "Qwen via Ollama (quantized)",
+                },
+                "ollama-deepseek-coder": {
+                    "parameters": "6.7B",
+                    "type": "Code-specialized (Ollama)",
+                    "memory_requirement": "~4GB",
+                    "license": "Custom",
+                    "description": "DeepSeek Coder via Ollama (quantized)",
+                },
+                "ollama-wizardcoder": {
+                    "parameters": "15B",
+                    "type": "Code-specialized (Ollama)",
+                    "memory_requirement": "~8GB",
+                    "license": "Custom",
+                    "description": "WizardCoder via Ollama (quantized)",
+                },
             }
-        })
+        )
 
     def load_model(self, model_name: str) -> LocalModelAdapter:
         """Load a model, using factory for enhanced models."""
@@ -416,7 +428,7 @@ class EnhancedModelManager(ModelManager):
                 return {
                     "available": True,
                     "installed_models": [model["name"] for model in models],
-                    "server_version": response.headers.get("server", "unknown")
+                    "server_version": response.headers.get("server", "unknown"),
                 }
             else:
                 return {"available": False, "reason": f"Server error: {response.status_code}"}

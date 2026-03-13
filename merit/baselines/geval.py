@@ -2,6 +2,7 @@
 
 Reference: Liu et al., 2023 - "G-Eval: NLG Evaluation using GPT-4 with Chain-of-Thought"
 """
+
 from typing import Dict
 import re
 
@@ -21,6 +22,7 @@ class GEvalBaseline:
     def _get_client(self):
         if self._client is None and self.provider == "anthropic":
             import anthropic
+
             self._client = anthropic.Anthropic()
         return self._client
 
@@ -37,6 +39,7 @@ class GEvalBaseline:
             return response.content[0].text
         elif self.provider == "ollama":
             import requests
+
             resp = requests.post(
                 "http://localhost:11434/api/generate",
                 json={"model": self.model, "prompt": prompt, "stream": False},

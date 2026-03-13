@@ -1,4 +1,5 @@
 """MERIT: Multi-dimensional Evaluation of Reasoning in Transformers."""
+
 __version__ = "3.0.0"
 __author__ = "Tirth Kanani"
 
@@ -24,6 +25,7 @@ def __getattr__(name):
     }
     if name in _lazy:
         import importlib
+
         mod = importlib.import_module(_lazy[name])
         return getattr(mod, name)
     raise AttributeError(f"module {__name__!r} has no attribute {name!r}")

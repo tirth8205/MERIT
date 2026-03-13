@@ -1,4 +1,5 @@
 """Tests for annotation pipeline."""
+
 import pytest
 import json
 from pathlib import Path
@@ -26,10 +27,18 @@ class TestAnnotationPipeline:
 
     def test_annotate_single(self, pipeline):
         mock_result = {
-            "consistency": 4, "factual": 3, "reasoning": 5, "alignment": 4,
-            "explanations": {"consistency": "ok", "factual": "ok", "reasoning": "ok", "alignment": "ok"}
+            "consistency": 4,
+            "factual": 3,
+            "reasoning": 5,
+            "alignment": 4,
+            "explanations": {
+                "consistency": "ok",
+                "factual": "ok",
+                "reasoning": "ok",
+                "alignment": "ok",
+            },
         }
-        with patch.object(pipeline, '_call_annotator', return_value=mock_result):
+        with patch.object(pipeline, "_call_annotator", return_value=mock_result):
             result = pipeline.annotate("Sample response", reference="Reference answer")
             assert result["consistency"] == 4
             assert result["factual"] == 3
@@ -38,10 +47,13 @@ class TestAnnotationPipeline:
 
     def test_annotate_batch(self, pipeline):
         mock_result = {
-            "consistency": 4, "factual": 3, "reasoning": 5, "alignment": 4,
-            "explanations": {}
+            "consistency": 4,
+            "factual": 3,
+            "reasoning": 5,
+            "alignment": 4,
+            "explanations": {},
         }
-        with patch.object(pipeline, '_call_annotator', return_value=mock_result):
+        with patch.object(pipeline, "_call_annotator", return_value=mock_result):
             results = pipeline.annotate_batch(
                 responses=["resp1", "resp2", "resp3"],
                 references=["ref1", "ref2", "ref3"],
@@ -52,9 +64,15 @@ class TestAnnotationPipeline:
             assert results[2]["index"] == 2
 
     def test_annotate_batch_with_progress(self, pipeline):
-        mock_result = {"consistency": 4, "factual": 3, "reasoning": 5, "alignment": 4, "explanations": {}}
+        mock_result = {
+            "consistency": 4,
+            "factual": 3,
+            "reasoning": 5,
+            "alignment": 4,
+            "explanations": {},
+        }
         progress_calls = []
-        with patch.object(pipeline, '_call_annotator', return_value=mock_result):
+        with patch.object(pipeline, "_call_annotator", return_value=mock_result):
             pipeline.annotate_batch(
                 responses=["a", "b"],
                 progress_callback=lambda i, t: progress_calls.append((i, t)),
@@ -81,10 +99,18 @@ class TestAnnotationPipeline:
 
     def test_parse_error_fallback(self, pipeline):
         """Test that unparseable responses return defaults."""
-        with patch.object(pipeline, '_call_annotator', return_value={
-            "consistency": 3, "factual": 3, "reasoning": 3, "alignment": 3,
-            "explanations": {}, "parse_error": True
-        }):
+        with patch.object(
+            pipeline,
+            "_call_annotator",
+            return_value={
+                "consistency": 3,
+                "factual": 3,
+                "reasoning": 3,
+                "alignment": 3,
+                "explanations": {},
+                "parse_error": True,
+            },
+        ):
             result = pipeline.annotate("bad response")
             assert result["consistency"] == 3  # Default
 

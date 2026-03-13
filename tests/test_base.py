@@ -1,4 +1,5 @@
 """Tests for base metric abstractions."""
+
 import pytest
 from merit.core.base import BaseMetric, MetricResult
 
@@ -59,5 +60,6 @@ class TestBaseMetric:
 class TestBaseModelAdapter:
     def test_cannot_instantiate_abstract(self):
         from merit.models.base import BaseModelAdapter
+
         with pytest.raises(TypeError):
             BaseModelAdapter()

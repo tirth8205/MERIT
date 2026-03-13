@@ -1,6 +1,7 @@
 """
 Tests for experiment framework.
 """
+
 import pytest
 import json
 import tempfile
@@ -30,7 +31,7 @@ class TestExperimentConfig:
             metrics=["logical_consistency", "factual_accuracy"],
             baseline_methods=["bert_score", "rouge"],
             statistical_tests=["t_test", "wilcoxon"],
-            output_dir="test_output"
+            output_dir="test_output",
         )
 
         assert config.experiment_name == "test_experiment"
@@ -61,7 +62,7 @@ class TestExperimentConfig:
             metrics=["logical_consistency"],
             baseline_methods=[],
             statistical_tests=[],
-            output_dir="test_output"
+            output_dir="test_output",
         )
 
         # Should not raise any exceptions
@@ -81,7 +82,7 @@ class TestExperimentConfig:
             metrics=["logical_consistency"],
             baseline_methods=[],
             statistical_tests=[],
-            output_dir="test_output"
+            output_dir="test_output",
         )
 
         # Should be serializable to dict using asdict
@@ -103,10 +104,10 @@ class TestExperimentConfig:
             metrics=["logical_consistency"],
             baseline_methods=[],
             statistical_tests=[],
-            output_dir="test_output"
+            output_dir="test_output",
         )
 
-        with tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=False) as f:
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f:
             config_file = f.name
 
         try:
@@ -127,9 +128,9 @@ class TestExperimentConfig:
 def _make_mock_runner(config):
     """Create an ExperimentRunner with heavy dependencies mocked out."""
     mock_manager_mod = MagicMock()
-    with patch.dict('sys.modules', {'merit.models.manager': mock_manager_mod}):
-        with patch.object(ExperimentRunner, '_initialize_metrics', return_value={}):
-            with patch.object(ExperimentRunner, '_initialize_baselines', return_value={}):
+    with patch.dict("sys.modules", {"merit.models.manager": mock_manager_mod}):
+        with patch.object(ExperimentRunner, "_initialize_metrics", return_value={}):
+            with patch.object(ExperimentRunner, "_initialize_baselines", return_value={}):
                 runner = ExperimentRunner(config)
     return runner
 
@@ -153,7 +154,7 @@ class TestExperimentRunner:
                 metrics=["logical_consistency", "factual_accuracy"],
                 baseline_methods=["bert_score"],
                 statistical_tests=["t_test"],
-                output_dir=temp_dir
+                output_dir=temp_dir,
             )
 
     def test_runner_initialization(self, mock_config):
@@ -191,7 +192,7 @@ class TestExperimentConfigDefaults:
                 metrics=["logical_consistency"],
                 baseline_methods=[],
                 statistical_tests=[],
-                output_dir=temp_dir
+                output_dir=temp_dir,
             )
 
             assert len(config.models) == 1
@@ -212,7 +213,7 @@ class TestExperimentConfigDefaults:
                 metrics=["logical_consistency"],
                 baseline_methods=[],
                 statistical_tests=[],
-                output_dir=temp_dir
+                output_dir=temp_dir,
             )
 
             assert len(config.benchmarks) == 3
@@ -232,7 +233,7 @@ class TestExperimentConfigDefaults:
                 metrics=["logical_consistency"],
                 baseline_methods=[],
                 statistical_tests=[],
-                output_dir=temp_dir
+                output_dir=temp_dir,
             )
 
             config_dict = asdict(config)
@@ -260,7 +261,7 @@ class TestExperimentIntegration:
                 metrics=["logical_consistency"],
                 baseline_methods=[],
                 statistical_tests=[],
-                output_dir=temp_dir
+                output_dir=temp_dir,
             )
 
             runner = _make_mock_runner(config)
@@ -286,7 +287,7 @@ def test_experiment_with_different_runs(num_runs):
             metrics=["logical_consistency"],
             baseline_methods=[],
             statistical_tests=[],
-            output_dir=temp_dir
+            output_dir=temp_dir,
         )
 
         assert config.num_runs == num_runs
@@ -308,7 +309,7 @@ def test_experiment_with_different_sample_sizes(sample_size):
             metrics=["logical_consistency"],
             baseline_methods=[],
             statistical_tests=[],
-            output_dir=temp_dir
+            output_dir=temp_dir,
         )
 
         assert sample_size in config.sample_sizes
@@ -349,7 +350,7 @@ class TestMetricModeConfig:
             metric_mode="both",
         )
 
-        with tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=False) as f:
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".json", delete=False) as f:
             config_file = f.name
 
         try:
@@ -375,8 +376,8 @@ class TestRunnerMetricModes:
                 output_dir=temp_dir,
             )
             mock_manager_mod = MagicMock()
-            with patch.dict('sys.modules', {'merit.models.manager': mock_manager_mod}):
-                with patch.object(ExperimentRunner, '_initialize_baselines', return_value={}):
+            with patch.dict("sys.modules", {"merit.models.manager": mock_manager_mod}):
+                with patch.object(ExperimentRunner, "_initialize_baselines", return_value={}):
                     runner = ExperimentRunner(config)
 
             assert "heuristic" in runner.metrics
@@ -395,9 +396,9 @@ class TestRunnerMetricModes:
             )
             mock_judge = MagicMock()
             mock_manager_mod = MagicMock()
-            with patch.dict('sys.modules', {'merit.models.manager': mock_manager_mod}):
-                with patch.object(ExperimentRunner, '_initialize_baselines', return_value={}):
-                    with patch('merit.core.llm_judge.LLMJudge', return_value=mock_judge):
+            with patch.dict("sys.modules", {"merit.models.manager": mock_manager_mod}):
+                with patch.object(ExperimentRunner, "_initialize_baselines", return_value={}):
+                    with patch("merit.core.llm_judge.LLMJudge", return_value=mock_judge):
                         runner = ExperimentRunner(config)
 
             assert "llm_judge" in runner.metrics
@@ -420,9 +421,11 @@ class TestRunnerMetricModes:
                 "llm_judge": mock_judge,
             }
             mock_manager_mod = MagicMock()
-            with patch.dict('sys.modules', {'merit.models.manager': mock_manager_mod}):
-                with patch.object(ExperimentRunner, '_initialize_baselines', return_value={}):
-                    with patch.object(ExperimentRunner, '_initialize_metrics', return_value=both_metrics):
+            with patch.dict("sys.modules", {"merit.models.manager": mock_manager_mod}):
+                with patch.object(ExperimentRunner, "_initialize_baselines", return_value={}):
+                    with patch.object(
+                        ExperimentRunner, "_initialize_metrics", return_value=both_metrics
+                    ):
                         runner = ExperimentRunner(config)
 
             assert "heuristic" in runner.metrics
@@ -537,7 +540,9 @@ class TestRunnerMetricModes:
             assert "merit_heuristic" in stats
             assert "baselines" in stats
             assert "metric_statistics" in stats
-            assert stats["merit_heuristic"]["logical_consistency"]["mean_across_runs"] == pytest.approx(0.85)
+            assert stats["merit_heuristic"]["logical_consistency"][
+                "mean_across_runs"
+            ] == pytest.approx(0.85)
             assert stats["baselines"]["bert_score"]["mean_across_runs"] == pytest.approx(0.65)
             assert stats["task_accuracy"]["mean"] == pytest.approx(0.55)
 

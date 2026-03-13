@@ -1,4 +1,5 @@
 """Factual accuracy metric for MERIT."""
+
 import re
 from typing import Dict, List, Optional
 
@@ -53,14 +54,14 @@ class FactualAccuracyMetric(BaseMetric):
 
         # Request session for web calls
         self.session = requests.Session()
-        self.session.headers.update({
-            'User-Agent': 'MERIT-FactChecker/2.0 (Academic Research)'
-        })
+        self.session.headers.update({"User-Agent": "MERIT-FactChecker/2.0 (Academic Research)"})
 
     def compute(self, response: str, reference: Optional[str] = None, **kwargs) -> MetricResult:
         """Compute enhanced factual accuracy."""
         if not response.strip():
-            return MetricResult(score=0.0, dimension=self.dimension, details={"analysis": "Empty prediction"})
+            return MetricResult(
+                score=0.0, dimension=self.dimension, details={"analysis": "Empty prediction"}
+            )
 
         # Extract factual claims
         claims = self._extract_factual_claims(response)
@@ -69,10 +70,7 @@ class FactualAccuracyMetric(BaseMetric):
             return MetricResult(
                 score=0.5,
                 dimension=self.dimension,
-                details={
-                    "analysis": "No factual claims detected",
-                    "claims_analysis": []
-                }
+                details={"analysis": "No factual claims detected", "claims_analysis": []},
             )
 
         # Verify each claim
@@ -106,7 +104,7 @@ class FactualAccuracyMetric(BaseMetric):
             "total_claims": len(claims),
             "verifiable_claims": total_verifiable,
             "correct_claims": verified_count,
-            "claims_analysis": claims_analysis
+            "claims_analysis": claims_analysis,
         }
 
         return MetricResult(score=combined_score, dimension=self.dimension, details=details)
@@ -137,36 +135,40 @@ class FactualAccuracyMetric(BaseMetric):
                                     break
 
                             if obj:
-                                claims.append({
-                                    "subject": subject,
-                                    "predicate": predicate,
-                                    "object": obj,
-                                    "full_sentence": sent.text,
-                                    "entities": entities
-                                })
+                                claims.append(
+                                    {
+                                        "subject": subject,
+                                        "predicate": predicate,
+                                        "object": obj,
+                                        "full_sentence": sent.text,
+                                        "entities": entities,
+                                    }
+                                )
         else:
             # Fallback: simple pattern-based extraction
-            sentences = re.split(r'[.!?]+', text)
+            sentences = re.split(r"[.!?]+", text)
             for sentence in sentences:
                 if sentence.strip():
                     # Look for simple factual patterns
                     patterns = [
-                        r'(\w+(?:\s+\w+)*)\s+is\s+(\w+(?:\s+\w+)*)',
-                        r'(\w+(?:\s+\w+)*)\s+was\s+(\w+(?:\s+\w+)*)',
-                        r'(\w+(?:\s+\w+)*)\s+has\s+(\w+(?:\s+\w+)*)',
-                        r'(\w+(?:\s+\w+)*)\s+contains\s+(\w+(?:\s+\w+)*)'
+                        r"(\w+(?:\s+\w+)*)\s+is\s+(\w+(?:\s+\w+)*)",
+                        r"(\w+(?:\s+\w+)*)\s+was\s+(\w+(?:\s+\w+)*)",
+                        r"(\w+(?:\s+\w+)*)\s+has\s+(\w+(?:\s+\w+)*)",
+                        r"(\w+(?:\s+\w+)*)\s+contains\s+(\w+(?:\s+\w+)*)",
                     ]
 
                     for pattern in patterns:
                         matches = re.findall(pattern, sentence, re.IGNORECASE)
                         for match in matches:
-                            claims.append({
-                                "subject": match[0],
-                                "predicate": "is/was/has/contains",
-                                "object": match[1],
-                                "full_sentence": sentence.strip(),
-                                "entities": []
-                            })
+                            claims.append(
+                                {
+                                    "subject": match[0],
+                                    "predicate": "is/was/has/contains",
+                                    "object": match[1],
+                                    "full_sentence": sentence.strip(),
+                                    "entities": [],
+                                }
+                            )
 
         return claims
 
@@ -182,7 +184,9 @@ class FactualAccuracyMetric(BaseMetric):
     def _verify_claim(self, claim: Dict) -> Dict:
         """Verify a factual claim using multiple web sources."""
         # Build a stable cache key from the claim's textual content
-        cache_key = claim.get("full_sentence", f"{claim['subject']}|{claim['predicate']}|{claim['object']}")
+        cache_key = claim.get(
+            "full_sentence", f"{claim['subject']}|{claim['predicate']}|{claim['object']}"
+        )
 
         # 1. Check knowledge cache first
         cached = self._knowledge_cache.get(cache_key)
@@ -206,43 +210,49 @@ class FactualAccuracyMetric(BaseMetric):
             "verifiable": False,
             "verdict": "unverifiable",
             "confidence": 0.0,
-            "sources": []
+            "sources": [],
         }
 
         # Try verification sources in order of reliability
         # 3a. Wikidata (structured, most reliable)
         wikidata_result = self._check_wikidata(claim)
         if wikidata_result["found"]:
-            verification.update({
-                "verifiable": True,
-                "verdict": wikidata_result["verdict"],
-                "confidence": wikidata_result["confidence"],
-                "sources": [{"type": "wikidata", "result": wikidata_result}]
-            })
+            verification.update(
+                {
+                    "verifiable": True,
+                    "verdict": wikidata_result["verdict"],
+                    "confidence": wikidata_result["confidence"],
+                    "sources": [{"type": "wikidata", "result": wikidata_result}],
+                }
+            )
             self._knowledge_cache.put(cache_key, verification)
             return verification
 
         # 3b. Wikipedia (detailed text)
         wikipedia_result = self._check_wikipedia(claim)
         if wikipedia_result["found"]:
-            verification.update({
-                "verifiable": True,
-                "verdict": wikipedia_result["verdict"],
-                "confidence": wikipedia_result["confidence"],
-                "sources": [{"type": "wikipedia", "result": wikipedia_result}]
-            })
+            verification.update(
+                {
+                    "verifiable": True,
+                    "verdict": wikipedia_result["verdict"],
+                    "confidence": wikipedia_result["confidence"],
+                    "sources": [{"type": "wikipedia", "result": wikipedia_result}],
+                }
+            )
             self._knowledge_cache.put(cache_key, verification)
             return verification
 
         # 3c. DuckDuckGo Instant Answers (broad coverage)
         ddg_result = self._check_duckduckgo(claim)
         if ddg_result["found"]:
-            verification.update({
-                "verifiable": True,
-                "verdict": ddg_result["verdict"],
-                "confidence": ddg_result["confidence"],
-                "sources": [{"type": "duckduckgo", "result": ddg_result}]
-            })
+            verification.update(
+                {
+                    "verifiable": True,
+                    "verdict": ddg_result["verdict"],
+                    "confidence": ddg_result["confidence"],
+                    "sources": [{"type": "duckduckgo", "result": ddg_result}],
+                }
+            )
             self._knowledge_cache.put(cache_key, verification)
             return verification
 
@@ -269,7 +279,7 @@ class FactualAccuracyMetric(BaseMetric):
                     "search": subject,
                     "language": "en",
                     "format": "json",
-                    "limit": 1
+                    "limit": 1,
                 }
 
                 response = self.session.get(search_url, params=search_params, timeout=10)
@@ -286,7 +296,7 @@ class FactualAccuracyMetric(BaseMetric):
                     "action": "wbgetentities",
                     "ids": entity_id,
                     "languages": "en",
-                    "format": "json"
+                    "format": "json",
                 }
 
                 response = self.session.get(entity_url, params=entity_params, timeout=10)
@@ -349,7 +359,7 @@ class FactualAccuracyMetric(BaseMetric):
 
             if obj_lower in page_content:
                 # Find supporting context
-                sentences = page_content.split('.')
+                sentences = page_content.split(".")
                 supporting = [s.strip() for s in sentences if obj_lower in s][:2]
 
                 if supporting:
@@ -376,12 +386,7 @@ class FactualAccuracyMetric(BaseMetric):
                 ddg_data = self.cache[cache_key]
             else:
                 ddg_url = "https://api.duckduckgo.com/"
-                params = {
-                    "q": query,
-                    "format": "json",
-                    "no_html": 1,
-                    "skip_disambig": 1
-                }
+                params = {"q": query, "format": "json", "no_html": 1, "skip_disambig": 1}
 
                 response = self.session.get(ddg_url, params=params, timeout=10)
                 ddg_data = response.json()

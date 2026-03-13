@@ -1,6 +1,7 @@
 """
 Tests for local model management system.
 """
+
 import pytest
 import torch
 from unittest.mock import Mock, patch, MagicMock
@@ -18,21 +19,25 @@ class TestDeviceManager:
 
     def test_get_optimal_device_cpu_fallback(self):
         """Test CPU fallback when no GPU available"""
-        with patch('torch.backends.mps.is_available', return_value=False), \
-             patch('torch.cuda.is_available', return_value=False):
+        with (
+            patch("torch.backends.mps.is_available", return_value=False),
+            patch("torch.cuda.is_available", return_value=False),
+        ):
             device = DeviceManager.get_optimal_device()
             assert device == "cpu"
 
     def test_get_optimal_device_mps(self):
         """Test MPS device selection"""
-        with patch('torch.backends.mps.is_available', return_value=True):
+        with patch("torch.backends.mps.is_available", return_value=True):
             device = DeviceManager.get_optimal_device()
             assert device == "mps"
 
     def test_get_optimal_device_cuda(self):
         """Test CUDA device selection"""
-        with patch('torch.backends.mps.is_available', return_value=False), \
-             patch('torch.cuda.is_available', return_value=True):
+        with (
+            patch("torch.backends.mps.is_available", return_value=False),
+            patch("torch.cuda.is_available", return_value=True),
+        ):
             device = DeviceManager.get_optimal_device()
             assert device == "cuda"
 
@@ -45,9 +50,11 @@ class TestDeviceManager:
         mock_vm.percent = 50.0
         mock_psutil.virtual_memory.return_value = mock_vm
 
-        with patch('torch.backends.mps.is_available', return_value=False), \
-             patch('torch.cuda.is_available', return_value=False), \
-             patch.dict('sys.modules', {'psutil': mock_psutil}):
+        with (
+            patch("torch.backends.mps.is_available", return_value=False),
+            patch("torch.cuda.is_available", return_value=False),
+            patch.dict("sys.modules", {"psutil": mock_psutil}),
+        ):
 
             memory_info = get_memory_info()
 
@@ -64,8 +71,10 @@ class TestDeviceManager:
         mock_vm.percent = 50.0
         mock_psutil.virtual_memory.return_value = mock_vm
 
-        with patch('torch.backends.mps.is_available', return_value=True), \
-             patch.dict('sys.modules', {'psutil': mock_psutil}):
+        with (
+            patch("torch.backends.mps.is_available", return_value=True),
+            patch.dict("sys.modules", {"psutil": mock_psutil}),
+        ):
 
             memory_info = get_memory_info()
 
@@ -90,8 +99,10 @@ class TestLocalModelAdapter:
 
     def test_adapter_initialization(self):
         """Test adapter initialization with model_name"""
-        with patch('merit.models.huggingface.TRANSFORMERS_AVAILABLE', True), \
-             patch.object(DeviceManager, 'get_optimal_device', return_value='cpu'):
+        with (
+            patch("merit.models.huggingface.TRANSFORMERS_AVAILABLE", True),
+            patch.object(DeviceManager, "get_optimal_device", return_value="cpu"),
+        ):
 
             with tempfile.TemporaryDirectory() as cache_dir:
                 adapter = TinyLlamaAdapter(cache_dir=cache_dir)
@@ -100,11 +111,11 @@ class TestLocalModelAdapter:
                 assert adapter.device == "cpu"
                 assert adapter.model is None  # Not loaded yet
 
-    @patch('merit.models.huggingface.AutoTokenizer')
-    @patch('merit.models.huggingface.AutoModelForCausalLM')
+    @patch("merit.models.huggingface.AutoTokenizer")
+    @patch("merit.models.huggingface.AutoModelForCausalLM")
     def test_generate_text(self, mock_model_cls, mock_tokenizer_cls):
         """Test text generation"""
-        with patch.object(DeviceManager, 'get_optimal_device', return_value='cpu'):
+        with patch.object(DeviceManager, "get_optimal_device", return_value="cpu"):
             # Setup mocks
             mock_tokenizer = Mock()
             mock_tokenizer.return_value = {"input_ids": torch.tensor([[1, 2, 3]])}
@@ -122,11 +133,7 @@ class TestLocalModelAdapter:
                 adapter = TinyLlamaAdapter(cache_dir=cache_dir)
                 adapter.load_model()
 
-                result = adapter.generate(
-                    prompt="Test prompt",
-                    max_length=50,
-                    temperature=0.7
-                )
+                result = adapter.generate(prompt="Test prompt", max_length=50, temperature=0.7)
 
                 assert isinstance(result, str)
                 mock_model.generate.assert_called_once()
@@ -134,20 +141,24 @@ class TestLocalModelAdapter:
     def test_get_embeddings(self):
         """Test that LocalModelAdapter is abstract (no get_embeddings by default)"""
         # LocalModelAdapter.generate is abstract
-        with patch('merit.models.huggingface.TRANSFORMERS_AVAILABLE', True), \
-             patch.object(DeviceManager, 'get_optimal_device', return_value='cpu'):
+        with (
+            patch("merit.models.huggingface.TRANSFORMERS_AVAILABLE", True),
+            patch.object(DeviceManager, "get_optimal_device", return_value="cpu"),
+        ):
 
             with tempfile.TemporaryDirectory() as cache_dir:
                 adapter = TinyLlamaAdapter(cache_dir=cache_dir)
                 # get_embeddings not implemented - should not exist
-                assert not hasattr(adapter, 'get_embeddings') or \
-                       getattr(adapter, 'get_embeddings', None) is None
+                assert (
+                    not hasattr(adapter, "get_embeddings")
+                    or getattr(adapter, "get_embeddings", None) is None
+                )
 
-    @patch('merit.models.huggingface.AutoTokenizer')
-    @patch('merit.models.huggingface.AutoModelForCausalLM')
+    @patch("merit.models.huggingface.AutoTokenizer")
+    @patch("merit.models.huggingface.AutoModelForCausalLM")
     def test_generate_with_error_handling(self, mock_model_cls, mock_tokenizer_cls):
         """Test generation with error handling"""
-        with patch.object(DeviceManager, 'get_optimal_device', return_value='cpu'):
+        with patch.object(DeviceManager, "get_optimal_device", return_value="cpu"):
             mock_tokenizer = Mock()
             mock_tokenizer.return_value = {"input_ids": torch.tensor([[1, 2, 3]])}
             mock_tokenizer.eos_token_id = 2
@@ -196,11 +207,11 @@ class TestModelManager:
             assert "type" in first_model
             assert "memory_requirement" in first_model
 
-    @patch('merit.models.huggingface.AutoTokenizer')
-    @patch('merit.models.huggingface.AutoModelForCausalLM')
+    @patch("merit.models.huggingface.AutoTokenizer")
+    @patch("merit.models.huggingface.AutoModelForCausalLM")
     def test_load_model_success(self, mock_model_cls, mock_tokenizer_cls):
         """Test successful model loading"""
-        with patch.object(DeviceManager, 'get_optimal_device', return_value='cpu'):
+        with patch.object(DeviceManager, "get_optimal_device", return_value="cpu"):
             mock_model = Mock()
             mock_tokenizer = Mock()
             mock_tokenizer.pad_token = None
@@ -253,11 +264,11 @@ class TestModelManager:
 
         assert len(manager.loaded_models) == 0
 
-    @patch('merit.models.huggingface.AutoTokenizer')
-    @patch('merit.models.huggingface.AutoModelForCausalLM')
+    @patch("merit.models.huggingface.AutoTokenizer")
+    @patch("merit.models.huggingface.AutoModelForCausalLM")
     def test_benchmark_models(self, mock_model_cls, mock_tokenizer_cls):
         """Test model benchmarking"""
-        with patch.object(DeviceManager, 'get_optimal_device', return_value='cpu'):
+        with patch.object(DeviceManager, "get_optimal_device", return_value="cpu"):
             mock_model = Mock()
             mock_tokenizer = Mock()
             mock_tokenizer.pad_token = None
@@ -276,7 +287,7 @@ class TestModelManager:
                     models=["tinyllama-1b"],
                     test_prompts=["Test prompt"],
                     max_length=50,
-                    temperature=0.7
+                    temperature=0.7,
                 )
 
                 assert isinstance(results, dict)
@@ -287,11 +298,11 @@ class TestModelManager:
 class TestModelIntegration:
     """Test integration between model components"""
 
-    @patch('merit.models.huggingface.AutoTokenizer')
-    @patch('merit.models.huggingface.AutoModelForCausalLM')
+    @patch("merit.models.huggingface.AutoTokenizer")
+    @patch("merit.models.huggingface.AutoModelForCausalLM")
     def test_full_model_workflow(self, mock_model_cls, mock_tokenizer_cls):
         """Test complete model workflow"""
-        with patch.object(DeviceManager, 'get_optimal_device', return_value='cpu'):
+        with patch.object(DeviceManager, "get_optimal_device", return_value="cpu"):
             mock_model = Mock()
             mock_tokenizer = Mock()
             mock_tokenizer.pad_token = None
@@ -323,7 +334,7 @@ class TestModelIntegration:
         devices = ["cpu", "mps", "cuda"]
 
         for device in devices:
-            with patch.object(DeviceManager, 'get_optimal_device', return_value=device):
+            with patch.object(DeviceManager, "get_optimal_device", return_value=device):
                 optimal_device = DeviceManager.get_optimal_device()
                 assert optimal_device == device
 

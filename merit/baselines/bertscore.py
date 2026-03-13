@@ -1,9 +1,11 @@
 """BERTScore baseline for semantic similarity evaluation."""
+
 import torch
 from typing import Dict, List
 
 try:
     from bert_score import score as bert_score_fn
+
     BERT_SCORE_AVAILABLE = True
 except ImportError:
     BERT_SCORE_AVAILABLE = False
@@ -34,7 +36,8 @@ class BERTScoreBaseline:
             return {"precision": 0.0, "recall": 0.0, "f1": 0.0, "error": "bert-score not installed"}
 
         P, R, F1 = bert_score_fn(
-            [prediction], [reference],
+            [prediction],
+            [reference],
             model_type=self.model_type,
             device=self.device,
             verbose=False,
@@ -54,7 +57,8 @@ class BERTScoreBaseline:
             return {"precision": [], "recall": [], "f1": [], "error": "bert-score not installed"}
 
         P, R, F1 = bert_score_fn(
-            predictions, references,
+            predictions,
+            references,
             model_type=self.model_type,
             device=self.device,
             verbose=False,

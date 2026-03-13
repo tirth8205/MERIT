@@ -4,6 +4,7 @@ Tests for CLI functionality.
 The CLI has been streamlined to: create_parser, main, cmd_evaluate,
 cmd_list_models, cmd_test_model, cmd_compare.
 """
+
 import pytest
 import json
 import tempfile
@@ -50,7 +51,7 @@ class TestCLIParser:
         parser = create_parser()
 
         args = parser.parse_args(["evaluate", "--model", "gpt2"])
-        assert hasattr(args, 'func')
+        assert hasattr(args, "func")
         assert args.model == "gpt2"
         assert args.dataset == "arc"  # default
         assert args.sample_size == 50  # default
@@ -77,8 +78,8 @@ class TestCLIParser:
         parser = create_parser()
 
         args = parser.parse_args(["annotate", "--input", "results.json"])
-        assert hasattr(args, 'func')
-        assert getattr(args, 'input') == "results.json"
+        assert hasattr(args, "func")
+        assert getattr(args, "input") == "results.json"
         assert args.samples == 50  # default
 
         args = parser.parse_args(["annotate", "-i", "results.json", "--samples", "100"])
@@ -89,28 +90,28 @@ class TestCLIParser:
         parser = create_parser()
 
         args = parser.parse_args(["report", "--input", "results.json"])
-        assert hasattr(args, 'func')
-        assert getattr(args, 'input') == "results.json"
-        assert getattr(args, 'format') == "latex"  # default
+        assert hasattr(args, "func")
+        assert getattr(args, "input") == "results.json"
+        assert getattr(args, "format") == "latex"  # default
         assert args.output == "paper_outputs"  # default
 
         for fmt in ["latex", "csv", "json"]:
             args = parser.parse_args(["report", "-i", "r.json", "--format", fmt])
-            assert getattr(args, 'format') == fmt
+            assert getattr(args, "format") == fmt
 
     def test_parser_subcommands_models_list(self):
         """Test models list subcommand parsing"""
         parser = create_parser()
 
         args = parser.parse_args(["models", "list"])
-        assert hasattr(args, 'func')
+        assert hasattr(args, "func")
 
     def test_parser_subcommands_models_test(self):
         """Test models test subcommand parsing"""
         parser = create_parser()
 
         args = parser.parse_args(["models", "test", "gpt2"])
-        assert hasattr(args, 'func')
+        assert hasattr(args, "func")
         assert args.model_name == "gpt2"
 
     def test_parser_subcommands_compare(self):
@@ -118,7 +119,7 @@ class TestCLIParser:
         parser = create_parser()
 
         args = parser.parse_args(["compare", "file1.json", "file2.json"])
-        assert hasattr(args, 'func')
+        assert hasattr(args, "func")
         assert args.result_files == ["file1.json", "file2.json"]
 
 
@@ -147,7 +148,7 @@ class TestEvaluateCommand:
                                         "task_accuracy": {"mean": 0.8},
                                         "metric_statistics": {
                                             "logical_consistency": {"mean_across_runs": 0.75}
-                                        }
+                                        },
                                     }
                                 }
                             }
@@ -158,8 +159,10 @@ class TestEvaluateCommand:
         }
         mock_runner.run_full_experiment.return_value = mock_results
 
-        with patch('merit.experiments.ExperimentRunner', return_value=mock_runner), \
-             patch('merit.experiments.ExperimentConfig'):
+        with (
+            patch("merit.experiments.ExperimentRunner", return_value=mock_runner),
+            patch("merit.experiments.ExperimentConfig"),
+        ):
             cmd_evaluate(args)
             mock_runner.run_full_experiment.assert_called_once()
 
@@ -177,9 +180,11 @@ class TestEvaluateCommand:
         mock_results = {"model_results": {"gpt2": {}}}
         mock_runner.run_full_experiment.return_value = mock_results
 
-        with patch('merit.experiments.ExperimentRunner', return_value=mock_runner), \
-             patch('merit.experiments.ExperimentConfig'), \
-             patch('builtins.open', create=True) as mock_open:
+        with (
+            patch("merit.experiments.ExperimentRunner", return_value=mock_runner),
+            patch("merit.experiments.ExperimentConfig"),
+            patch("builtins.open", create=True) as mock_open,
+        ):
             mock_file = Mock()
             mock_open.return_value.__enter__ = Mock(return_value=mock_file)
             mock_open.return_value.__exit__ = Mock(return_value=False)
@@ -187,7 +192,7 @@ class TestEvaluateCommand:
             cmd_evaluate(args)
 
             # Verify file was opened for writing
-            mock_open.assert_called_with("results.json", 'w')
+            mock_open.assert_called_with("results.json", "w")
 
     def test_evaluate_command_arguments(self):
         """Test evaluate command arguments parsing"""
@@ -200,13 +205,19 @@ class TestEvaluateCommand:
         assert args.sample_size == 50  # default
 
         # Test custom arguments
-        args = parser.parse_args([
-            "evaluate",
-            "--model", "custom_model",
-            "--dataset", "hellaswag",
-            "--sample-size", "100",
-            "--output", "results.json"
-        ])
+        args = parser.parse_args(
+            [
+                "evaluate",
+                "--model",
+                "custom_model",
+                "--dataset",
+                "hellaswag",
+                "--sample-size",
+                "100",
+                "--output",
+                "results.json",
+            ]
+        )
         assert args.model == "custom_model"
         assert args.dataset == "hellaswag"
         assert args.sample_size == 100
@@ -227,11 +238,11 @@ class TestModelCommands:
                 "type": "causal_lm",
                 "memory_requirement": "~500MB",
                 "license": "MIT",
-                "description": "Small GPT-2 model"
+                "description": "Small GPT-2 model",
             }
         }
 
-        with patch('merit.models.manager.ModelManager', return_value=mock_manager):
+        with patch("merit.models.manager.ModelManager", return_value=mock_manager):
             cmd_list_models(args)
             mock_manager.list_available_models.assert_called_once()
 
@@ -246,7 +257,7 @@ class TestModelCommands:
         mock_adapter.generate.return_value = "AI is artificial intelligence."
         mock_manager.load_model.return_value = mock_adapter
 
-        with patch('merit.models.manager.ModelManager', return_value=mock_manager):
+        with patch("merit.models.manager.ModelManager", return_value=mock_manager):
             cmd_test_model(args)
 
             mock_manager.load_model.assert_called_once_with("gpt2")
@@ -265,43 +276,41 @@ class TestCompareCommand:
             file2 = os.path.join(temp_dir, "result2.json")
             output_file = os.path.join(temp_dir, "comparison.txt")
 
-            with open(file1, 'w') as f:
-                json.dump({
-                    "model_results": {
-                        "gpt2": {
-                            "benchmarks": {
-                                "arc": {
-                                    "sample_sizes": {
-                                        "50": {
-                                            "statistics": {
-                                                "task_accuracy": {"mean": 0.8}
-                                            }
+            with open(file1, "w") as f:
+                json.dump(
+                    {
+                        "model_results": {
+                            "gpt2": {
+                                "benchmarks": {
+                                    "arc": {
+                                        "sample_sizes": {
+                                            "50": {"statistics": {"task_accuracy": {"mean": 0.8}}}
                                         }
                                     }
                                 }
                             }
                         }
-                    }
-                }, f)
+                    },
+                    f,
+                )
 
-            with open(file2, 'w') as f:
-                json.dump({
-                    "model_results": {
-                        "tinyllama": {
-                            "benchmarks": {
-                                "arc": {
-                                    "sample_sizes": {
-                                        "50": {
-                                            "statistics": {
-                                                "task_accuracy": {"mean": 0.6}
-                                            }
+            with open(file2, "w") as f:
+                json.dump(
+                    {
+                        "model_results": {
+                            "tinyllama": {
+                                "benchmarks": {
+                                    "arc": {
+                                        "sample_sizes": {
+                                            "50": {"statistics": {"task_accuracy": {"mean": 0.6}}}
                                         }
                                     }
                                 }
                             }
                         }
-                    }
-                }, f)
+                    },
+                    f,
+                )
 
             args = Mock()
             args.result_files = [file1, file2]
@@ -331,7 +340,7 @@ class TestCLIIntegration:
 
     def test_main_function_with_args(self):
         """Test main function with valid arguments"""
-        with patch('merit.cli.create_parser') as mock_parser:
+        with patch("merit.cli.create_parser") as mock_parser:
             mock_args = Mock()
             mock_args.func = Mock()
 
@@ -345,7 +354,7 @@ class TestCLIIntegration:
 
     def test_main_function_with_keyboard_interrupt(self):
         """Test main function handles keyboard interrupt"""
-        with patch('merit.cli.create_parser') as mock_parser:
+        with patch("merit.cli.create_parser") as mock_parser:
             mock_args = Mock()
             mock_args.func = Mock(side_effect=KeyboardInterrupt())
 
@@ -353,13 +362,13 @@ class TestCLIIntegration:
             parser_instance.parse_args.return_value = mock_args
             mock_parser.return_value = parser_instance
 
-            with patch('sys.exit') as mock_exit:
+            with patch("sys.exit") as mock_exit:
                 main()
                 mock_exit.assert_called_once_with(1)
 
     def test_main_function_with_exception(self):
         """Test main function handles general exceptions"""
-        with patch('merit.cli.create_parser') as mock_parser:
+        with patch("merit.cli.create_parser") as mock_parser:
             mock_args = Mock()
             mock_args.func = Mock(side_effect=Exception("Test error"))
 
@@ -367,13 +376,13 @@ class TestCLIIntegration:
             parser_instance.parse_args.return_value = mock_args
             mock_parser.return_value = parser_instance
 
-            with patch('sys.exit') as mock_exit:
+            with patch("sys.exit") as mock_exit:
                 main()
                 mock_exit.assert_called_once_with(1)
 
     def test_main_function_no_subcommand(self):
         """Test main function when no subcommand provided"""
-        with patch('merit.cli.create_parser') as mock_parser:
+        with patch("merit.cli.create_parser") as mock_parser:
             mock_args = Mock(spec=[])  # No 'func' attribute
 
             parser_instance = Mock()
@@ -385,20 +394,23 @@ class TestCLIIntegration:
             parser_instance.print_help.assert_called_once()
 
 
-@pytest.mark.parametrize("command,args", [
-    ("evaluate", ["--model", "gpt2"]),
-    ("models", ["list"]),
-    ("compare", ["file.json"]),
-    ("annotate", ["--input", "results.json"]),
-    ("report", ["--input", "results.json"]),
-])
+@pytest.mark.parametrize(
+    "command,args",
+    [
+        ("evaluate", ["--model", "gpt2"]),
+        ("models", ["list"]),
+        ("compare", ["file.json"]),
+        ("annotate", ["--input", "results.json"]),
+        ("report", ["--input", "results.json"]),
+    ],
+)
 def test_all_commands_have_func_attribute(command, args):
     """Test that all commands have func attribute set"""
     parser = create_parser()
     full_args = [command] + args
 
     parsed_args = parser.parse_args(full_args)
-    assert hasattr(parsed_args, 'func'), f"Command {command} missing func attribute"
+    assert hasattr(parsed_args, "func"), f"Command {command} missing func attribute"
 
 
 def test_cli_error_handling():

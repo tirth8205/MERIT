@@ -1,4 +1,5 @@
 """Command Line Interface for MERIT."""
+
 import argparse
 import sys
 import os
@@ -13,7 +14,7 @@ def main():
     parser = create_parser()
     args = parser.parse_args()
 
-    if hasattr(args, 'func'):
+    if hasattr(args, "func"):
         try:
             args.func(args)
         except KeyboardInterrupt:
@@ -32,31 +33,40 @@ def create_parser():
         prog="merit",
         description="MERIT: Multi-dimensional Evaluation of Reasoning in Transformers",
     )
-    parser.add_argument(
-        "--version", action="version", version=f"MERIT {merit.__version__}"
-    )
+    parser.add_argument("--version", action="version", version=f"MERIT {merit.__version__}")
 
     subparsers = parser.add_subparsers(title="commands", dest="command")
 
     # --- evaluate ---
-    eval_parser = subparsers.add_parser(
-        "evaluate", help="Evaluate a model on a benchmark dataset"
-    )
+    eval_parser = subparsers.add_parser("evaluate", help="Evaluate a model on a benchmark dataset")
     eval_parser.add_argument("--model", "-m", required=True, help="Model name (e.g. tinyllama-1b)")
     eval_parser.add_argument(
-        "--dataset", "-d", default="arc",
+        "--dataset",
+        "-d",
+        default="arc",
         choices=["arc", "hellaswag", "truthfulqa", "mmlu_logic", "gsm8k", "bbh"],
         help="Benchmark dataset (default: arc)",
     )
-    eval_parser.add_argument("--sample-size", "-s", type=int, default=50,
-                             help="Number of samples (0 = full dataset, default: 50)")
     eval_parser.add_argument(
-        "--mode", default="heuristic",
+        "--sample-size",
+        "-s",
+        type=int,
+        default=50,
+        help="Number of samples (0 = full dataset, default: 50)",
+    )
+    eval_parser.add_argument(
+        "--mode",
+        default="heuristic",
         choices=["heuristic", "judge", "both"],
         help="Evaluation mode (default: heuristic). 'judge' requires ANTHROPIC_API_KEY.",
     )
-    eval_parser.add_argument("--num-runs", "-n", type=int, default=1,
-                             help="Number of runs for statistical robustness (default: 1)")
+    eval_parser.add_argument(
+        "--num-runs",
+        "-n",
+        type=int,
+        default=1,
+        help="Number of runs for statistical robustness (default: 1)",
+    )
     eval_parser.add_argument("--output", "-o", help="Save results to this JSON file")
     eval_parser.set_defaults(func=cmd_evaluate)
 
@@ -73,7 +83,9 @@ def create_parser():
     test_parser.set_defaults(func=cmd_test_model)
 
     # --- compare ---
-    compare_parser = subparsers.add_parser("compare", help="Compare experiment results side by side")
+    compare_parser = subparsers.add_parser(
+        "compare", help="Compare experiment results side by side"
+    )
     compare_parser.add_argument("result_files", nargs="+", help="Result JSON files to compare")
     compare_parser.add_argument("--output", "-o", default="comparison.txt", help="Output file")
     compare_parser.set_defaults(func=cmd_compare)
@@ -82,13 +94,21 @@ def create_parser():
     annotate_parser = subparsers.add_parser(
         "annotate", help="Run Claude annotation pipeline (requires ANTHROPIC_API_KEY)"
     )
-    annotate_parser.add_argument("--input", "-i", required=True, help="Experiment results JSON file")
-    annotate_parser.add_argument("--samples", type=int, default=50,
-                                 help="Number of samples to annotate (default: 50)")
-    annotate_parser.add_argument("--provider", default="anthropic",
-                                 choices=["anthropic", "ollama"], help="Annotation provider")
-    annotate_parser.add_argument("--output", "-o", default="annotations",
-                                 help="Output directory for annotations")
+    annotate_parser.add_argument(
+        "--input", "-i", required=True, help="Experiment results JSON file"
+    )
+    annotate_parser.add_argument(
+        "--samples", type=int, default=50, help="Number of samples to annotate (default: 50)"
+    )
+    annotate_parser.add_argument(
+        "--provider",
+        default="anthropic",
+        choices=["anthropic", "ollama"],
+        help="Annotation provider",
+    )
+    annotate_parser.add_argument(
+        "--output", "-o", default="annotations", help="Output directory for annotations"
+    )
     annotate_parser.set_defaults(func=cmd_annotate)
 
     # --- report ---
@@ -96,10 +116,16 @@ def create_parser():
         "report", help="Generate paper-ready tables and exports from results"
     )
     report_parser.add_argument("--input", "-i", required=True, help="Experiment results JSON file")
-    report_parser.add_argument("--format", "-f", default="latex",
-                               choices=["latex", "csv", "json"], help="Output format (default: latex)")
-    report_parser.add_argument("--output", "-o", default="paper_outputs",
-                               help="Output directory (created if needed)")
+    report_parser.add_argument(
+        "--format",
+        "-f",
+        default="latex",
+        choices=["latex", "csv", "json"],
+        help="Output format (default: latex)",
+    )
+    report_parser.add_argument(
+        "--output", "-o", default="paper_outputs", help="Output directory (created if needed)"
+    )
     report_parser.set_defaults(func=cmd_report)
 
     return parser
@@ -113,7 +139,11 @@ def cmd_evaluate(args):
     mode_map = {"heuristic": "heuristic", "judge": "llm_judge", "both": "both"}
     metric_mode = mode_map[args.mode]
 
-    mode_label = {"heuristic": "heuristic metrics", "judge": "LLM judge", "both": "heuristic + LLM judge"}
+    mode_label = {
+        "heuristic": "heuristic metrics",
+        "judge": "LLM judge",
+        "both": "heuristic + LLM judge",
+    }
     print(f"Evaluating {args.model} on {args.dataset} (mode: {mode_label[args.mode]})")
     print(f"Sample size: {args.sample_size if args.sample_size > 0 else 'full dataset'}")
 
@@ -155,7 +185,7 @@ def cmd_evaluate(args):
                 print(f"{metric}: {score:.3f}")
 
     if args.output:
-        with open(args.output, 'w') as f:
+        with open(args.output, "w") as f:
             json.dump(results, f, indent=2, default=str)
         print(f"\nResults saved to: {args.output}")
 
@@ -170,7 +200,9 @@ def cmd_list_models(args):
     print("Available Models:")
     print("-" * 40)
     for name, info in models.items():
-        print(f"  {name:<25} {info.get('parameters', '?'):>5}  {info.get('memory_requirement', '?')}")
+        print(
+            f"  {name:<25} {info.get('parameters', '?'):>5}  {info.get('memory_requirement', '?')}"
+        )
     print()
 
 
@@ -219,7 +251,7 @@ def cmd_compare(args):
                     lines.append(f"    {dataset} (n={size}): {acc:.1%} accuracy")
         lines.append("")
 
-    with open(args.output, 'w') as f:
+    with open(args.output, "w") as f:
         f.write("\n".join(lines))
 
     print(f"Comparison saved to: {args.output}")
@@ -263,7 +295,10 @@ def cmd_annotate(args):
         print(f"  [{i}/{total}]", end="\r")
 
     annotations = pipeline.annotate_batch(
-        responses, references, contexts, progress_callback=progress,
+        responses,
+        references,
+        contexts,
+        progress_callback=progress,
     )
 
     out_path = pipeline.save_annotations(annotations)
@@ -297,7 +332,7 @@ def cmd_report(args):
     out_dir = Path(args.output)
     out_dir.mkdir(parents=True, exist_ok=True)
 
-    fmt = getattr(args, 'format', 'latex')
+    fmt = getattr(args, "format", "latex")
 
     if fmt == "latex":
         latex = generate_results_table(table_data)

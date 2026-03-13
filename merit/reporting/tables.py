@@ -1,4 +1,5 @@
 """Generate LaTeX tables for paper inclusion."""
+
 from typing import Dict, List
 import numpy as np
 from scipy.stats import spearmanr

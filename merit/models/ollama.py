@@ -1,10 +1,12 @@
 """Ollama model adapter for MERIT."""
+
 import json
 from typing import Optional
 
 try:
     import requests
     import subprocess
+
     OLLAMA_AVAILABLE = True
 except ImportError:
     OLLAMA_AVAILABLE = False
@@ -54,10 +56,7 @@ class OllamaAdapter:
 
         try:
             response = requests.post(
-                f"{self.host}/api/pull",
-                json={"name": self.model_name},
-                stream=True,
-                timeout=300
+                f"{self.host}/api/pull", json={"name": self.model_name}, stream=True, timeout=300
             )
 
             if response.status_code == 200:
@@ -77,7 +76,9 @@ class OllamaAdapter:
             print(f"\u2717 Error pulling {self.model_name}: {e}")
             return False
 
-    def generate(self, prompt: str, max_length: int = 1000, temperature: float = 0.7, **kwargs) -> str:
+    def generate(
+        self, prompt: str, max_length: int = 1000, temperature: float = 0.7, **kwargs
+    ) -> str:
         """Generate text using Ollama API"""
         if not self.available:
             return "Error: Ollama server not available"
@@ -95,14 +96,10 @@ class OllamaAdapter:
                     "temperature": temperature,
                     "num_predict": max_length,
                 },
-                "stream": False
+                "stream": False,
             }
 
-            response = requests.post(
-                f"{self.host}/api/generate",
-                json=payload,
-                timeout=120
-            )
+            response = requests.post(f"{self.host}/api/generate", json=payload, timeout=120)
 
             if response.status_code == 200:
                 result = response.json()

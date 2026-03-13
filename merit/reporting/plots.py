@@ -1,27 +1,31 @@
 """Publication-quality matplotlib figures for MERIT papers."""
+
 import numpy as np
 from typing import Dict, List, Optional
 from pathlib import Path
 
 # Configure matplotlib for publication
 import matplotlib
+
 matplotlib.use("Agg")  # Non-interactive backend
 import matplotlib.pyplot as plt
 import matplotlib.ticker as ticker
 
 # Publication style
-plt.rcParams.update({
-    "font.size": 11,
-    "font.family": "serif",
-    "axes.labelsize": 12,
-    "axes.titlesize": 13,
-    "xtick.labelsize": 10,
-    "ytick.labelsize": 10,
-    "legend.fontsize": 10,
-    "figure.dpi": 150,
-    "savefig.dpi": 300,
-    "savefig.bbox": "tight",
-})
+plt.rcParams.update(
+    {
+        "font.size": 11,
+        "font.family": "serif",
+        "axes.labelsize": 12,
+        "axes.titlesize": 13,
+        "xtick.labelsize": 10,
+        "ytick.labelsize": 10,
+        "legend.fontsize": 10,
+        "figure.dpi": 150,
+        "savefig.dpi": 300,
+        "savefig.bbox": "tight",
+    }
+)
 
 
 def radar_chart(
@@ -47,7 +51,7 @@ def radar_chart(
     for (model, scores), color in zip(model_scores.items(), colors):
         values = [scores[d] for d in dimensions]
         values += values[:1]
-        ax.plot(angles, values, 'o-', linewidth=2, label=model, color=color)
+        ax.plot(angles, values, "o-", linewidth=2, label=model, color=color)
         ax.fill(angles, values, alpha=0.1, color=color)
 
     ax.set_xticks(angles[:-1])
@@ -84,7 +88,7 @@ def scaling_plot(
         z = np.polyfit(np.log(model_sizes), scores, 1)
         x_smooth = np.linspace(min(model_sizes), max(model_sizes), 100)
         y_smooth = np.polyval(z, np.log(x_smooth))
-        ax.plot(x_smooth, y_smooth, '--', color=color, alpha=0.5, label=name)
+        ax.plot(x_smooth, y_smooth, "--", color=color, alpha=0.5, label=name)
 
     ax.set_xlabel("Model Size (B parameters)")
     ax.set_ylabel("Score")
@@ -127,9 +131,18 @@ def correlation_heatmap(
     fig, ax = plt.subplots(figsize=(8, 6))
 
     if sns:
-        sns.heatmap(matrix, annot=True, fmt=".2f", xticklabels=names,
-                     yticklabels=names, cmap="RdYlGn", center=0, ax=ax,
-                     vmin=-1, vmax=1)
+        sns.heatmap(
+            matrix,
+            annot=True,
+            fmt=".2f",
+            xticklabels=names,
+            yticklabels=names,
+            cmap="RdYlGn",
+            center=0,
+            ax=ax,
+            vmin=-1,
+            vmax=1,
+        )
     else:
         im = ax.imshow(matrix, cmap="RdYlGn", vmin=-1, vmax=1)
         ax.set_xticks(range(n))
