@@ -39,6 +39,7 @@ class TestDeviceManager:
             assert device == "cuda"
 
 
+@pytest.mark.slow
 class TestLogicalConsistencyMetric:
     """Test logical consistency metric"""
 
@@ -154,6 +155,7 @@ class TestFactualAccuracyMetric:
         assert 0.0 <= result.score <= 1.0
 
 
+@pytest.mark.slow
 class TestReasoningStepMetric:
     """Test reasoning step metric"""
 
@@ -286,6 +288,7 @@ class TestAlignmentMetric:
         assert result.score == 0.5  # Neutral for empty text
 
 
+@pytest.mark.slow
 class TestMetricIntegration:
     """Test integration between different metrics"""
 
@@ -386,6 +389,7 @@ class TestMetricIntegration:
         assert result_dict["dimension"] == result.dimension
 
 
+@pytest.mark.slow
 @pytest.mark.parametrize("device", ["cpu", "mps", "cuda"])
 def test_device_compatibility(device):
     """Test metrics work on different devices"""
@@ -407,6 +411,7 @@ def test_device_compatibility(device):
                 pytest.fail(f"Device {device} compatibility failed: {e}")
 
 
+@pytest.mark.slow
 def test_metric_error_handling():
     """Test metrics handle errors gracefully"""
     with patch('merit.core.device.DeviceManager.get_optimal_device', return_value="cpu"):
